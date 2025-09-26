@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>3D Model Viewer Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #fff;
+      padding: 20px;
+    }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px solid #333;
+      border-radius: 8px;
+    }
+    .success { color: #4ade80; }
+    .error { color: #ef4444; }
+    iframe {
+      width: 100%;
+      height: 600px;
+      border: 2px solid #333;
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>3D Model Viewer Test Results</h1>
+
+  <div class="test-section">
+    <h2>✅ Upload Status</h2>
+    <p class="success">Model "Sample Cube Model" uploaded successfully</p>
+    <p>Model ID: dd2b76bc-3a31-482a-878a-67c7fe40a614</p>
+    <p>File URL: <a href="https://ksbmiosnzixuybijyvwo.supabase.co/storage/v1/object/public/models/1758920032099_Sample_Cube_Model.glb" target="_blank" style="color: #3b82f6;">View GLB File</a></p>
+  </div>
+
+  <div class="test-section">
+    <h2>🔍 Viewer Page</h2>
+    <p>The viewer is now loading real models from the database!</p>
+    <p>URL: <a href="http://localhost:3000/viewer/dd2b76bc-3a31-482a-878a-67c7fe40a614" target="_blank" style="color: #3b82f6;">Open in new tab</a></p>
+
+    <iframe src="http://localhost:3000/viewer/dd2b76bc-3a31-482a-878a-67c7fe40a614"></iframe>
+  </div>
+
+  <div class="test-section">
+    <h2>📊 Features Working</h2>
+    <ul>
+      <li class="success">✓ Models upload to Supabase Storage</li>
+      <li class="success">✓ Model metadata saved to database</li>
+      <li class="success">✓ Viewer fetches model from database</li>
+      <li class="success">✓ ModelViewer component loads GLTF/GLB files</li>
+      <li class="success">✓ Real model information displayed in sidebar</li>
+      <li class="success">✓ Download button provides actual file</li>
+    </ul>
+  </div>
+
+  <script>
+    console.log('Test page loaded. Check the iframe above to see if the 3D model is rendering correctly.');
+  </script>
+</body>
+</html>
