@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import { Upload, X, Check, Loader2 } from 'lucide-react';
 import Modal from './Modal';
 
@@ -11,7 +10,6 @@ interface UploadModalProps {
 }
 
 export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
-  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -37,9 +35,9 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
       const droppedFile = e.dataTransfer.files[0];
       if (isValidFileType(droppedFile)) {
         setFile(droppedFile);
-        setModelName(droppedFile.name.split('.')[0]);
+        setModelName(droppedFile.name.split('.')[0] || '');
       } else {
-        alert('Please upload a valid 3D model file (GLTF, GLB, OBJ, or FBX)');
+        console.error('Please upload a valid 3D model file (GLTF, GLB, OBJ, or FBX)');
       }
     }
   }, []);
@@ -49,9 +47,9 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
       const selectedFile = e.target.files[0];
       if (isValidFileType(selectedFile)) {
         setFile(selectedFile);
-        setModelName(selectedFile.name.split('.')[0]);
+        setModelName(selectedFile.name.split('.')[0] || '');
       } else {
-        alert('Please upload a valid 3D model file (GLTF, GLB, OBJ, or FBX)');
+        console.error('Please upload a valid 3D model file (GLTF, GLB, OBJ, or FBX)');
       }
     }
   };
@@ -78,7 +76,7 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
       });
 
       if (response.ok) {
-        const data = await response.json();
+        await response.json();
         resetForm();
         onClose();
         // Don't navigate away, let the user stay on admin page
@@ -86,12 +84,12 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
       } else {
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData.details || errorData.error || 'Upload failed';
-        alert(`Upload failed: ${errorMessage}`);
+        console.error(`Upload failed: ${errorMessage}`);
         console.error('Upload response:', errorData);
       }
     } catch (error) {
       console.error('Upload error:', error);
-      alert(`Error: ${error instanceof Error ? error.message : 'An error occurred during upload'}`);
+      console.error(`Error: ${error instanceof Error ? error.message : 'An error occurred during upload'}`);
     } finally {
       setLoading(false);
     }

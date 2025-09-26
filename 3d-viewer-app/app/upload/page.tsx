@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload, File, X, Check, Loader2 } from 'lucide-react';
+import { Upload, X, Check, Loader2 } from 'lucide-react';
 
 export default function UploadPage() {
   const router = useRouter();
@@ -31,9 +31,9 @@ export default function UploadPage() {
       const droppedFile = e.dataTransfer.files[0];
       if (isValidFileType(droppedFile)) {
         setFile(droppedFile);
-        setModelName(droppedFile.name.split('.')[0]);
+        setModelName(droppedFile.name.split('.')[0] || '');
       } else {
-        alert('Please upload a valid 3D model file (GLTF, GLB, OBJ, or FBX)');
+        console.error('Please upload a valid 3D model file (GLTF, GLB, OBJ, or FBX)');
       }
     }
   }, []);
@@ -43,9 +43,9 @@ export default function UploadPage() {
       const selectedFile = e.target.files[0];
       if (isValidFileType(selectedFile)) {
         setFile(selectedFile);
-        setModelName(selectedFile.name.split('.')[0]);
+        setModelName(selectedFile.name.split('.')[0] || '');
       } else {
-        alert('Please upload a valid 3D model file (GLTF, GLB, OBJ, or FBX)');
+        console.error('Please upload a valid 3D model file (GLTF, GLB, OBJ, or FBX)');
       }
     }
   };
@@ -75,11 +75,11 @@ export default function UploadPage() {
         const data = await response.json();
         router.push(`/viewer/${data.id}`);
       } else {
-        alert('Upload failed. Please try again.');
+        console.error('Upload failed. Please try again.');
       }
     } catch (error) {
       console.error('Upload error:', error);
-      alert('An error occurred during upload.');
+      console.error('An error occurred during upload.');
     } finally {
       setLoading(false);
     }

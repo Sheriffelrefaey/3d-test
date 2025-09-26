@@ -3,7 +3,7 @@
 import { Suspense, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Environment, Grid, useGLTF, Center, Bounds } from '@react-three/drei';
-import { Group } from 'three';
+import type { Group } from 'three';
 
 interface ModelViewerProps {
   modelUrl?: string;
@@ -18,8 +18,8 @@ function Model({ url }: { url: string }) {
 
 export default function ModelViewer({ modelUrl, children }: ModelViewerProps) {
   const groupRef = useRef<Group>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [_loading, _setLoading] = useState(false);
+  const [_error, _setError] = useState<string | null>(null);
 
   return (
     <div className="w-full h-full relative bg-gradient-to-b from-gray-300 to-gray-500">
@@ -119,17 +119,17 @@ export default function ModelViewer({ modelUrl, children }: ModelViewerProps) {
         </Suspense>
       </Canvas>
 
-      {loading && (
+      {_loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/50">
           <div className="text-white">Loading model...</div>
         </div>
       )}
 
-      {error && (
+      {_error && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/50">
           <div className="text-red-400 text-center">
             <p className="text-lg font-semibold mb-2">Failed to load model</p>
-            <p className="text-sm">{error}</p>
+            <p className="text-sm">{_error}</p>
           </div>
         </div>
       )}

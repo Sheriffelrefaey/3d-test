@@ -3,7 +3,7 @@
 import { use, useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { Annotation } from '@/types';
+import type { Annotation } from '@/types';
 import { Maximize2, Home, Settings, X, Eye, EyeOff, RotateCw, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
@@ -36,7 +36,7 @@ export default function ViewerPage({ params }: ViewerPageProps) {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
   const [showAnnotations, setShowAnnotations] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [_isFullscreen, setIsFullscreen] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

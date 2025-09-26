@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,8 +40,8 @@ export async function POST(request: NextRequest) {
     // This is a workaround until RLS policies are fixed in Supabase Dashboard
     const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
     const supabase = createSupabaseClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      process.env['NEXT_PUBLIC_SUPABASE_URL'] || '',
+      process.env['SUPABASE_SERVICE_KEY'] || process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] || '',
       {
         auth: {
           autoRefreshToken: false,
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Upload file to Supabase Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { data: _uploadData, error: uploadError } = await supabase.storage
       .from('models')
       .upload(uniqueFileName, buffer, {
         contentType: file.type || 'application/octet-stream',

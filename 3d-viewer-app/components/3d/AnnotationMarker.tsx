@@ -2,8 +2,9 @@
 
 import { useRef, useState } from 'react';
 import { Html } from '@react-three/drei';
-import { Mesh, Vector3 } from 'three';
-import { Annotation } from '@/types';
+import type { Mesh } from 'three';
+import { Vector3 } from 'three';
+import type { Annotation } from '@/types';
 
 interface AnnotationMarkerProps {
   annotation: Annotation;
@@ -13,10 +14,10 @@ interface AnnotationMarkerProps {
 export default function AnnotationMarker({ annotation, onClick }: AnnotationMarkerProps) {
   const meshRef = useRef<Mesh>(null);
   const [hovered, setHovered] = useState(false);
-  const [selected, setSelected] = useState(false);
+  const [_selected, setSelected] = useState(false);
 
   const handleClick = () => {
-    setSelected(!selected);
+    setSelected(!_selected);
     onClick?.(annotation);
   };
 
@@ -36,14 +37,14 @@ export default function AnnotationMarker({ annotation, onClick }: AnnotationMark
         />
       </mesh>
 
-      {(hovered || selected) && (
+      {(hovered || _selected) && (
         <Html
           position={[0, 0.3, 0]}
           center
           distanceFactor={8}
           style={{
             transition: 'all 0.2s',
-            opacity: hovered || selected ? 1 : 0,
+            opacity: hovered || _selected ? 1 : 0,
             pointerEvents: 'none',
           }}
         >

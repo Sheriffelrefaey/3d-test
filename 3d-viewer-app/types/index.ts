@@ -19,7 +19,7 @@ export interface Annotation {
   normal?: { x: number; y: number; z: number };
   color?: string;
   icon?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -31,7 +31,7 @@ export interface AnnotationInteraction {
   type: 'click' | 'hover' | 'view';
   user_id?: string;
   session_id?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 

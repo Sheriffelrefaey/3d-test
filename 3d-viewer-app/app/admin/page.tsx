@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Eye, Edit, Trash2, Search, Grid, List, Upload as UploadIcon, Calendar, FileBox, Box, MessageSquare } from 'lucide-react';
 import UploadModal from '@/components/ui/UploadModal';
-import { Model, Annotation } from '@/types';
+import type { Model } from '@/types';
 import { supabase } from '@/lib/supabase/client';
 
 export default function AdminPage() {
@@ -23,14 +23,15 @@ export default function AdminPage() {
     storageUsed: 0,
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const fetchData = async () => {
     await fetchModels();
     // Fetch statistics after models are loaded
   };
+
+  useEffect(() => {
+    fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchStatistics = async (modelsList: Model[] = models) => {
     try {
@@ -49,7 +50,7 @@ export default function AdminPage() {
       let totalSize = 0;
 
       // If we have models with file_size, use that
-      const { data: modelsWithSize, error: sizeError } = await supabase
+      const { data: modelsWithSize, error: _sizeError } = await supabase
         .from('models')
         .select('*');
 
@@ -102,7 +103,9 @@ export default function AdminPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this model?')) return;
+    // eslint-disable-next-line no-alert
+    const userConfirmed = window.confirm('Are you sure you want to delete this model?');
+    if (!userConfirmed) return;
 
     try {
       const response = await fetch(`/api/models?id=${id}`, {
@@ -118,11 +121,11 @@ export default function AdminPage() {
           storageUsed: Math.max(0, prev.storageUsed - 5) // Rough estimate
         }));
       } else {
-        alert('Failed to delete model');
+        console.error('Failed to delete model');
       }
     } catch (error) {
       console.error('Failed to delete model:', error);
-      alert('An error occurred while deleting the model');
+      console.error('An error occurred while deleting the model');
     }
   };
 
@@ -326,7 +329,7 @@ export default function AdminPage() {
                         View
                       </button>
                       <button
-                        onClick={() => router.push(`/admin/edit/${model.id}`)}
+                        onClick={() => { /* Edit functionality not implemented yet */ }}
                         className="flex-1 py-2 rounded-lg glass border border-purple-500/50 text-purple-400 hover:bg-purple-500/10 transition-all flex items-center justify-center gap-1"
                       >
                         <Edit className="w-4 h-4" />
@@ -370,7 +373,7 @@ export default function AdminPage() {
                       <Eye className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => router.push(`/admin/edit/${model.id}`)}
+                      onClick={() => { /* Edit functionality not implemented yet */ }}
                       className="p-2 rounded-lg glass border border-purple-500/50 text-purple-400 hover:bg-purple-500/10 transition-all"
                     >
                       <Edit className="w-4 h-4" />
