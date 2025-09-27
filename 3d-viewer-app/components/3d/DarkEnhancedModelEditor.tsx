@@ -6,9 +6,7 @@ import { Canvas, useThree, useLoader, useFrame } from '@react-three/fiber';
 import { createPortal } from 'react-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import {
-  OrbitControls,
   Environment,
-  Grid,
   GizmoHelper,
   GizmoViewport,
   Html,
@@ -35,7 +33,10 @@ import {
   Lightbulb,
   Layers,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Plane,
+  Maximize,
+  Minimize
 } from 'lucide-react';
 
 // Components
@@ -44,12 +45,18 @@ import EnvironmentPanel from '@/components/editor/EnvironmentPanel';
 import AnnotationPanel from '@/components/ui/AnnotationPanel';
 import ObjectHierarchyPanel from '@/components/editor/ObjectHierarchyPanel';
 import { HUDAnnotationCard } from './HUDAnnotation';
+import CinematicCameraController from './CinematicCameraController';
+import InfiniteGroundPlane from './InfiniteGroundPlane';
+
+// Global texture cache to prevent reloading
+const textureCache = new Map<string, THREE.Texture>();
 
 // Store and utilities
 import { useEditorStore } from '@/lib/store/editorStore';
 import { materialToThreeJS } from '@/lib/materials/presets';
 import { getGLTFLoader } from '@/lib/three/loaders';
 import { autoGenerateUVs } from '@/lib/three/uvGenerator';
+import { saveGroups, loadGroups, updateGroup, deleteGroup } from '@/lib/store/groupPersistence';
 
 // Types
 import type {
@@ -70,21 +77,23 @@ interface DarkEnhancedModelEditorProps {
   readOnly?: boolean;  // Optional prop to make it read-only for viewer
 }
 
-// Screen position updater component - Projects 3D position above object
+// Optimized Screen position updater component
 function ScreenPositionUpdater({ clickPosition, onScreenPositionUpdate }: {
   clickPosition: THREE.Vector3 | null;
   onScreenPositionUpdate: (pos: { x: number; y: number } | null) => void;
 }) {
   const { camera, gl } = useThree();
+  const vectorRef = useRef(new THREE.Vector3());
 
   useFrame(() => {
     if (clickPosition) {
-      // Project a point above the clicked position for the HUD card
-      const vector = clickPosition.clone();
-      vector.y += 1; // Offset upward in 3D space
-      vector.project(camera);
-      const x = (vector.x * 0.5 + 0.5) * gl.domElement.clientWidth;
-      const y = (-vector.y * 0.5 + 0.5) * gl.domElement.clientHeight;
+      // Reuse vector to avoid creating new objects
+      vectorRef.current.copy(clickPosition);
+      vectorRef.current.y += 0.5; // Small offset upward
+      vectorRef.current.project(camera);
+
+      const x = (vectorRef.current.x * 0.5 + 0.5) * gl.domElement.clientWidth;
+      const y = (-vectorRef.current.y * 0.5 + 0.5) * gl.domElement.clientHeight;
       onScreenPositionUpdate({ x, y });
     } else {
       onScreenPositionUpdate(null);
@@ -94,96 +103,43 @@ function ScreenPositionUpdater({ clickPosition, onScreenPositionUpdate }: {
   return null;
 }
 
-// HUD Glow Material Component
+// Simple Blue Glow Overlay - 40% blue glowing surface
 function HUDGlowMaterial({ isSelected }: { isSelected: boolean }) {
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
+  const timeRef = useRef(0);
 
-  useFrame(({ clock }) => {
+  useFrame((_, delta) => {
     if (materialRef.current && isSelected) {
-      const pulse = Math.sin(clock.getElapsedTime() * 2) * 0.5 + 0.5;
-      materialRef.current.emissiveIntensity = 0.3 + pulse * 0.3;
-      materialRef.current.opacity = 0.3 + pulse * 0.2;
+      timeRef.current += delta;
+      // Stronger pulse between 50% and 70% opacity
+      const pulse = Math.sin(timeRef.current * 2) * 0.1 + 0.6;
+      materialRef.current.opacity = pulse;
+      materialRef.current.emissiveIntensity = pulse * 0.8;
     }
   });
+
+  if (!isSelected) return null;
 
   return (
     <meshStandardMaterial
       ref={materialRef}
-      color="#3b82f6"
-      emissive="#3b82f6"
+      color="#004080"  // Dark ocean blue
+      emissive="#0066cc"  // Ocean blue emission for glow
       emissiveIntensity={0.5}
       transparent
-      opacity={0.4}
-      side={THREE.FrontSide}
+      opacity={0.6}  // 60% opacity for stronger effect
+      side={THREE.DoubleSide}
+      depthWrite={false}
+      depthTest={true}
+      blending={THREE.NormalBlending}  // Normal blending to preserve original colors
+      polygonOffset={true}
+      polygonOffsetFactor={-1}  // Render slightly in front to avoid z-fighting
+      polygonOffsetUnits={-1}
     />
   );
 }
 
-// Animated Connection Line Component - Grows upward from object
-function AnimatedConnectionLine({ startPos, endPos, isVisible }: {
-  startPos: THREE.Vector3 | null;
-  endPos: THREE.Vector3 | null;
-  isVisible: boolean;
-}) {
-  const [lineProgress, setLineProgress] = useState(0);
-  const lineRef = useRef<any>();
-
-  useFrame(() => {
-    if (isVisible && lineProgress < 1) {
-      setLineProgress(prev => Math.min(prev + 0.08, 1));
-    } else if (!isVisible && lineProgress > 0) {
-      setLineProgress(prev => Math.max(prev - 0.08, 0));
-    }
-  });
-
-  if (!startPos || lineProgress === 0) return null;
-
-  // Create an upward line from the object position
-  const lineStart = startPos.clone();
-  const lineEnd = startPos.clone();
-  lineEnd.y += 2 * lineProgress; // Grow upward
-
-  // Create control points for a slight curve
-  const midPoint = lineStart.clone();
-  midPoint.y += 1 * lineProgress;
-  midPoint.x += 0.1 * Math.sin(lineProgress * Math.PI);
-
-  return (
-    <>
-      <Line
-        ref={lineRef}
-        points={[lineStart, midPoint, lineEnd]}
-        color="#3b82f6"
-        lineWidth={3}
-        transparent
-        opacity={0.8 * lineProgress}
-      />
-      {/* Glowing end point */}
-      {lineProgress > 0.5 && (
-        <mesh position={lineEnd}>
-          <sphereGeometry args={[0.06, 16, 16]} />
-          <meshStandardMaterial
-            color="#60a5fa"
-            emissive="#3b82f6"
-            emissiveIntensity={2}
-            transparent
-            opacity={lineProgress}
-          />
-        </mesh>
-      )}
-      {/* Pulse effect at base */}
-      <mesh position={lineStart}>
-        <ringGeometry args={[0.1 * lineProgress, 0.15 * lineProgress, 32]} />
-        <meshBasicMaterial
-          color="#3b82f6"
-          transparent
-          opacity={0.5 * (1 - lineProgress)}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-    </>
-  );
-}
+// Connection line component removed - using HUD card's built-in line
 
 // Enhanced 3D Scene Component
 function EnhancedScene({
@@ -199,7 +155,10 @@ function EnhancedScene({
   onMeshesLoaded,
   clickPosition,
   selectedAnnotation,
-  readOnly = false
+  readOnly = false,
+  setCameraTarget,
+  cameraTarget,
+  autoRotate
 }: {
   modelUrl: string;
   annotations: Annotation[];
@@ -214,6 +173,9 @@ function EnhancedScene({
   clickPosition?: THREE.Vector3 | null;
   selectedAnnotation?: Annotation | null;
   readOnly?: boolean;
+  setCameraTarget: (target: { position: THREE.Vector3; object: THREE.Object3D; } | null) => void;
+  cameraTarget: { position: THREE.Vector3; object: THREE.Object3D; } | null;
+  autoRotate: boolean;
 }) {
   const gltf = useLoader(getGLTFLoader, modelUrl);
   const { camera, scene } = useThree();
@@ -222,20 +184,25 @@ function EnhancedScene({
   const initialCameraPosition = useRef<THREE.Vector3>();
   const initialCameraTarget = useRef<THREE.Vector3>();
 
+
   // Get store state
   const {
     materials,
     transforms,
     environment,
-    selectedObject: selectedObjectName
+    selectedObject: selectedObjectName,
+    setTransform
   } = useEditorStore();
 
   // Reset view function
   const resetView = useCallback(() => {
-    if (controlsRef.current && initialCameraPosition.current && initialCameraTarget.current) {
+    // Clear camera target to reset view
+    setCameraTarget(null);
+    // Reset camera to initial position
+    if (initialCameraPosition.current && initialCameraTarget.current) {
       camera.position.copy(initialCameraPosition.current);
-      controlsRef.current.target.copy(initialCameraTarget.current);
-      controlsRef.current.update();
+      camera.lookAt(initialCameraTarget.current);
+      camera.updateProjectionMatrix();
     }
   }, [camera]);
 
@@ -244,16 +211,62 @@ function EnhancedScene({
     resetViewRef.current = resetView;
   }, [resetView, resetViewRef]);
 
-  // Extract meshes from model
+  // Extract meshes from model - including ALL planes
   useEffect(() => {
     const extractedMeshes: THREE.Mesh[] = [];
     const nameCount: Map<string, number> = new Map();
+    let planeCounter = 1;
 
     gltf.scene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        // Ensure unique names
+        // Skip ONLY our special infinite ground plane
+        if (child.name === 'Plane12847' || child.userData?.isGroundPlane) {
+          console.log('Skipping infinite ground plane:', child.name);
+          return;
+        }
+
+        // Detect plane-like objects based on geometry
+        const geometry = child.geometry;
+        let isPlane = false;
+        let planeInfo = { isFlat: false, dimension: '' };
+
+        if (geometry) {
+          geometry.computeBoundingBox();
+          const box = geometry.boundingBox;
+          if (box) {
+            const size = new THREE.Vector3();
+            box.getSize(size);
+
+            // Check if it's flat in any dimension - be more generous for planes
+            const threshold = 1.0; // More generous threshold for planes
+            if (size.y < threshold) {
+              isPlane = true;
+              planeInfo = { isFlat: true, dimension: 'Y' };
+            } else if (size.x < threshold) {
+              isPlane = true;
+              planeInfo = { isFlat: true, dimension: 'X' };
+            } else if (size.z < threshold) {
+              isPlane = true;
+              planeInfo = { isFlat: true, dimension: 'Z' };
+            }
+          }
+        }
+
+        // Also check by name patterns
+        const nameIndicatesPlane = child.name && (
+          child.name.toLowerCase().includes('plane') ||
+          child.name.toLowerCase().includes('floor') ||
+          child.name.toLowerCase().includes('ground')
+        );
+
+        // Ensure unique names - especially for unnamed planes
         if (!child.name || child.name === '') {
-          child.name = `Mesh_${extractedMeshes.length + 1}`;
+          if (isPlane || nameIndicatesPlane) {
+            child.name = `ModelPlane_${planeCounter++}`;
+            console.log('Found unnamed plane, naming it:', child.name);
+          } else {
+            child.name = `Mesh_${extractedMeshes.length + 1}`;
+          }
         } else {
           // Check for duplicate names and make them unique
           const baseName = child.name;
@@ -264,10 +277,37 @@ function EnhancedScene({
           nameCount.set(baseName, count + 1);
         }
 
-        // Add unique ID to userData for key generation
+        // Add metadata
         child.userData.uniqueId = `${child.name}_${child.uuid}`;
         child.userData.originalMaterial = child.material;
+        child.userData.isModelPlane = isPlane || nameIndicatesPlane;
+        // IMPORTANT: Mark model planes as always selectable
+        child.userData.isSelectable = true;
+
+        if (isPlane || nameIndicatesPlane) {
+          console.log('Detected plane:', child.name, planeInfo, 'Making it selectable');
+          // Force generate UV coordinates for planes if they don't have them
+          if (!child.geometry.attributes.uv) {
+            console.log(`Generating UV coordinates for plane: ${child.name}`);
+            autoGenerateUVs(child.geometry, child.name);
+          }
+        }
+
         extractedMeshes.push(child);
+      }
+    });
+
+    console.log('Total meshes extracted:', extractedMeshes.length);
+    console.log('Planes found:', extractedMeshes.filter(m => m.userData.isModelPlane).map(m => m.name));
+
+    // IMPORTANT: Reset any deleted/hidden flags for model planes
+    extractedMeshes.forEach(mesh => {
+      if (mesh.userData.isModelPlane) {
+        const transform = transforms.get(mesh.name);
+        if (transform?.deleted || transform?.visible === false) {
+          console.log(`Resetting visibility for plane: ${mesh.name}`);
+          // Note: setTransform will be called from parent component if needed
+        }
       }
     });
 
@@ -280,61 +320,69 @@ function EnhancedScene({
     gltf.scene.scale.set(1, 1, 1);
     gltf.scene.updateMatrixWorld(true);
 
-    // Calculate bounds of the unscaled model
-    const box = new THREE.Box3().setFromObject(gltf.scene);
+    // Simple bounds calculation for non-plane objects
+    const box = new THREE.Box3();
+    const nonPlaneMeshes = extractedMeshes.filter(m => m.name !== 'Plane12847');
+
+    if (nonPlaneMeshes.length > 0) {
+      // Calculate bounds from non-plane meshes only
+      nonPlaneMeshes.forEach((mesh, index) => {
+        if (index === 0) {
+          box.setFromObject(mesh);
+        } else {
+          box.expandByObject(mesh);
+        }
+      });
+    } else {
+      // Fallback if no meshes
+      box.setFromCenterAndSize(new THREE.Vector3(0, 1, 0), new THREE.Vector3(2, 2, 2));
+    }
+
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
 
-    // Calculate scale to fit the model (6x larger)
+    // Simple scaling
     const maxDim = Math.max(size.x, size.y, size.z);
-    const scale = 30 / maxDim;  // Changed from 10 to 30 for 6x size
+    const scale = 10 / maxDim;  // Standard scale
 
-    // Apply scale and center the model at origin
+    // Center the model
     gltf.scene.scale.setScalar(scale);
-    gltf.scene.position.x = -center.x * scale;
-    gltf.scene.position.z = -center.z * scale;
-    gltf.scene.position.y = -box.min.y * scale;
+    gltf.scene.position.set(
+      -center.x * scale,
+      -box.min.y * scale,
+      -center.z * scale
+    );
 
-    const scaledHeight = size.y * scale;
-    const scaledWidth = size.x * scale;
-    const scaledDepth = size.z * scale;
+    // Let SimpleCameraController handle initial camera setup
+    // Just store the model center for reset functionality
+    const targetPos = new THREE.Vector3(0, size.y * scale * 0.3, 0);
 
-    // Much closer view with higher angle
-    const distance = Math.max(scaledWidth, scaledDepth, scaledHeight) * 0.5;  // Even closer (0.5)
-    const cameraHeight = scaledHeight * 0.8 + distance * 0.7;  // Higher camera angle
-
-    // Set camera position and look at origin
-    const cameraPos = new THREE.Vector3(distance * 0.7, cameraHeight, distance * 0.7);
-    const targetPos = new THREE.Vector3(0, 0, 0);  // Center at origin
-
-    camera.position.copy(cameraPos);
-    camera.lookAt(targetPos);
-    camera.updateProjectionMatrix();
-
-    // Store initial positions
-    initialCameraPosition.current = cameraPos.clone();
+    // Store initial positions for reset
+    initialCameraPosition.current = new THREE.Vector3(10.5, 7.5, 10.5);
     initialCameraTarget.current = targetPos.clone();
-
-    if (controlsRef.current) {
-      controlsRef.current.target.copy(targetPos);
-      controlsRef.current.update();
-    }
   }, [gltf, camera, onMeshesLoaded]);
 
   // Apply materials to meshes with texture support
   useEffect(() => {
     meshes.forEach(mesh => {
+      // Skip the infinite ground plane
+      if (mesh.name === 'Plane12847') {
+        return;
+      }
+
       const material = materials.get(mesh.name);
       if (material) {
         // Check if mesh has UV coordinates - required for textures
         const geometry = mesh.geometry;
         let hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
 
-        // If no UVs exist and we need to apply a texture, generate them
-        if (!hasUVs && material.texture_url) {
+        // Always generate UVs for planes if they don't have them
+        if (!hasUVs && (material.texture_url || mesh.userData.isModelPlane)) {
           console.log(`No UV coordinates found for "${mesh.name}". Generating UVs...`);
           autoGenerateUVs(geometry, mesh.name);
           hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+          // Force geometry update
+          geometry.attributes.uv.needsUpdate = true;
         }
 
         console.log(`Applying material to mesh "${mesh.name}":`, {
@@ -385,34 +433,84 @@ function EnhancedScene({
         // Create the material
         const newMaterial = new THREE.MeshPhysicalMaterial(baseParams);
 
-        // Apply the material immediately
+        // Store reference for texture application
         mesh.material = newMaterial;
+        mesh.userData.hasMaterialApplied = true; // Mark that this mesh has a custom material
+
+        // For planes, ensure material updates are forced
+        if (mesh.userData.isModelPlane) {
+          newMaterial.needsUpdate = true;
+          console.log(`Applied material to plane: ${mesh.name}`);
+        }
 
         // If there's a texture URL and the mesh has UVs, load and apply texture
         if (material.texture_url && hasUVs) {
-          console.log(`Loading texture for "${mesh.name}" from: ${material.texture_url}`);
+          // Check if texture is already cached
+          const cacheKey = `${mesh.name}-${material.texture_url}`;
+          let texture = textureCache.get(cacheKey);
 
-          const textureLoader = new THREE.TextureLoader();
-          textureLoader.load(
-            material.texture_url,
-            (texture) => {
-              console.log(`Texture loaded successfully for "${mesh.name}"`);
+          if (texture) {
+            // Use cached texture
+            console.log(`Using cached texture for "${mesh.name}"`);
+            // Apply texture settings if they exist
+            if (material.texture_settings) {
+              const settings = material.texture_settings;
 
-              // Apply texture settings if they exist
-              if (material.texture_settings) {
-                const settings = material.texture_settings;
+              // Set texture repeat
+              if (settings.repeat) {
+                texture.repeat.set(settings.repeat.x || 1, settings.repeat.y || 1);
+              }
 
-                // Set texture repeat
-                if (settings.repeat) {
-                  texture.repeat.set(settings.repeat.x || 1, settings.repeat.y || 1);
-                }
+              // Set texture offset
+              if (settings.offset) {
+                texture.offset.set(settings.offset.x || 0, settings.offset.y || 0);
+              }
 
-                // Set texture offset
-                if (settings.offset) {
-                  texture.offset.set(settings.offset.x || 0, settings.offset.y || 0);
-                }
+              // Set texture rotation
+              if (settings.rotation !== undefined) {
+                texture.rotation = settings.rotation;
+              }
 
-                // Set texture rotation (in radians)
+              // Set texture wrap mode
+              texture.wrapS = settings.wrapS === 'repeat' ? THREE.RepeatWrapping :
+                            settings.wrapS === 'mirrored' ? THREE.MirroredRepeatWrapping :
+                            THREE.ClampToEdgeWrapping;
+              texture.wrapT = settings.wrapT === 'repeat' ? THREE.RepeatWrapping :
+                            settings.wrapT === 'mirrored' ? THREE.MirroredRepeatWrapping :
+                            THREE.ClampToEdgeWrapping;
+            }
+
+            // Apply the cached texture immediately
+            newMaterial.map = texture;
+            newMaterial.needsUpdate = true;
+          } else {
+            // Load new texture
+            console.log(`Loading texture for "${mesh.name}" from: ${material.texture_url}`);
+
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.load(
+              material.texture_url,
+              (texture) => {
+                console.log(`Texture loaded successfully for "${mesh.name}"`);
+
+                // Cache the texture
+                textureCache.set(cacheKey, texture);
+
+                // Apply texture settings if they exist
+                if (material.texture_settings) {
+                  const settings = material.texture_settings;
+
+                  // Set texture repeat
+                  if (settings.repeat) {
+                    texture.repeat.set(settings.repeat.x || 1, settings.repeat.y || 1);
+                  }
+
+                  // Set texture offset
+                  if (settings.offset) {
+                    texture.offset.set(settings.offset.x || 0, settings.offset.y || 0);
+                  }
+
+                  // Set texture rotation (in radians)
                 if (settings.rotation !== undefined) {
                   texture.rotation = settings.rotation;
                 }
@@ -444,9 +542,18 @@ function EnhancedScene({
                 // Ensure the material color doesn't tint the texture
                 mesh.material.color = new THREE.Color(1, 1, 1);
 
+                // For planes, force additional updates to ensure texture sticks
+                if (mesh.userData.isModelPlane) {
+                  mesh.geometry.attributes.uv.needsUpdate = true;
+                  mesh.material.map.needsUpdate = true;
+                  // Force a render update
+                  mesh.material.version++;
+                }
+
                 console.log(`Texture applied to "${mesh.name}"`, {
                   hasMap: !!mesh.material.map,
                   textureUrl: material.texture_url,
+                  isPlane: mesh.userData.isModelPlane,
                   material: mesh.material
                 });
               }
@@ -457,13 +564,17 @@ function EnhancedScene({
               console.error('Texture URL:', material.texture_url);
             }
           );
+          }
         }
       } else {
-        // No material override, use original
-        mesh.material = mesh.userData.originalMaterial || mesh.material;
+        // Only reset to original if no custom material has been applied
+        // This prevents reverting when materials update
+        if (!mesh.userData?.hasMaterialApplied) {
+          mesh.material = mesh.userData.originalMaterial || mesh.material;
+        }
       }
     });
-  }, [materials, meshes]);
+  }, [materials, meshes.length]); // Only re-run when materials change or mesh count changes
 
   // Apply transforms to meshes
   useEffect(() => {
@@ -540,10 +651,29 @@ function EnhancedScene({
 
   // Handle mesh click with proper closure
   const handleMeshClick = useCallback((event: any, mesh: THREE.Mesh) => {
-    // Check if mesh is deleted
+    console.log('Click detected on mesh:', mesh.name, 'isPlane:', mesh.userData?.isModelPlane);
+
+    // Only prevent selecting the infinite ground plane, not model planes
+    if (mesh.name === 'Plane12847') {
+      console.log('Blocked: infinite ground plane');
+      return;
+    }
+
+    // Log plane selection
+    if (mesh.userData?.isModelPlane) {
+      console.log('✅ Selecting model plane:', mesh.name);
+    }
+
+    // Check if mesh is deleted - but allow planes regardless
     const transform = transforms.get(mesh.name);
-    if (transform?.deleted) {
-      return; // Don't select deleted objects
+    if (transform?.deleted && !mesh.userData?.isModelPlane) {
+      console.log(`Blocking deleted non-plane: ${mesh.name}`);
+      return; // Don't select deleted objects (unless they're planes)
+    }
+
+    // Log plane selection attempts
+    if (mesh.userData?.isModelPlane) {
+      console.log(`Plane click detected: ${mesh.name}, deleted: ${transform?.deleted}, visible: ${transform?.visible}`);
     }
 
     // Get the actual event object
@@ -598,6 +728,15 @@ function EnhancedScene({
     } else {
       // Single select - notify parent
       onObjectSelect(mesh, event.point || event.intersections?.[0]?.point);
+
+      // Trigger camera animation to focus on selected object
+      // Add a small delay to ensure selection state is updated first
+      setTimeout(() => {
+        setCameraTarget({
+          position: event.point || event.intersections?.[0]?.point || mesh.position,
+          object: mesh
+        });
+      }, 50);
     }
   }, [selectedMeshNames, selectedObjects, meshes, transforms, onMultiSelect, onObjectSelect]);
 
@@ -643,30 +782,15 @@ function EnhancedScene({
         <Environment preset={environment?.background.environmentPreset as any || 'studio'} />
       )}
 
-      {/* Grid */}
-      {environment?.grid.show && (
-        <Grid
-          infiniteGrid
-          fadeDistance={30}
-          fadeStrength={1}
-          cellSize={0.5}
-          sectionSize={environment.grid.divisions / 4}
-          sectionColor={`rgb(${environment.grid.color.r}, ${environment.grid.color.g}, ${environment.grid.color.b})`}
-          cellColor={`rgb(${environment.grid.color.r}, ${environment.grid.color.g}, ${environment.grid.color.b})`}
-          args={[environment.grid.size, environment.grid.size]}
-        />
-      )}
+      {/* Infinite Ground Plane - Always visible */}
+      <InfiniteGroundPlane
+        color="#0a0a0a"
+        gridColor={`rgb(${environment?.grid.color.r || 100}, ${environment?.grid.color.g || 100}, ${environment?.grid.color.b || 100})`}
+        readOnly={readOnly}
+        showGrid={environment?.grid.show || false}
+      />
 
-      {/* Invisible plane for detecting clicks on empty space */}
-      <mesh
-        position={[0, -0.01, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        onClick={handleSceneClick}
-        visible={false}
-      >
-        <planeGeometry args={[1000, 1000]} />
-        <meshBasicMaterial />
-      </mesh>
+      {/* Removed the invisible plane - no longer needed */}
 
       {/* Render the entire model centered, with proper transforms applied */}
       <group position={[0, 0, 0]}>
@@ -675,11 +799,26 @@ function EnhancedScene({
 
       {/* Invisible click targets for each mesh */}
       {meshes.map((mesh) => {
+        // Skip only our special infinite ground plane from click targets
+        if (mesh.name === 'Plane12847' || mesh.userData?.isGroundPlane) {
+          return null;
+        }
+
+        // Log every mesh that gets a click target
+        if (mesh.userData?.isModelPlane) {
+          console.log(`Creating click target for plane: ${mesh.name}`);
+        }
+
         const transform = transforms.get(mesh.name);
         const isDeleted = transform?.deleted === true;
         const isVisible = transform ? (transform.visible !== false && !isDeleted) : true;
 
-        if (isDeleted || !isVisible) return null;
+        // Don't skip planes even if marked as deleted/invisible
+        if (mesh.userData?.isModelPlane) {
+          console.log(`Creating click target for plane: ${mesh.name} (even if deleted: ${isDeleted})`);
+        } else if (isDeleted || !isVisible) {
+          return null;
+        }
 
         const uniqueKey = mesh.userData.uniqueId || `${mesh.name}_${mesh.uuid}`;
 
@@ -749,34 +888,16 @@ function EnhancedScene({
               <meshBasicMaterial transparent opacity={0} />
             </mesh>
 
-            {/* HUD-style selection highlight with glow */}
+            {/* Simple 40% blue overlay for selected objects */}
             {isSelected && (
-              <>
-                {/* Blue glow effect */}
-                <mesh
-                  geometry={mesh.geometry}
-                  position={worldPosition}
-                  quaternion={worldQuaternion}
-                  scale={worldScale}
-                >
-                  <HUDGlowMaterial isSelected={true} />
-                </mesh>
-                {/* Wireframe overlay */}
-                <mesh
-                  geometry={mesh.geometry}
-                  position={worldPosition}
-                  quaternion={worldQuaternion}
-                  scale={worldScale}
-                >
-                  <meshBasicMaterial
-                    color={0x60a5fa}
-                    wireframe
-                    transparent
-                    opacity={0.2}
-                    depthTest={false}
-                  />
-                </mesh>
-              </>
+              <mesh
+                geometry={mesh.geometry}
+                position={worldPosition}
+                quaternion={worldQuaternion}
+                scale={worldScale}
+              >
+                <HUDGlowMaterial isSelected={true} />
+              </mesh>
             )}
           </group>
         );
@@ -796,29 +917,18 @@ function EnhancedScene({
         );
       })()}
 
-      {/* Animated connection line growing upward from click point */}
-      {selectedAnnotation && clickPosition && (
-        <AnimatedConnectionLine
-          startPos={clickPosition}
-          endPos={null} // Line grows upward, no specific end point needed
-          isVisible={true}
-        />
-      )}
+      {/* Connection line removed - HUD card has its own line */}
 
       {/* Annotations are only shown when objects are clicked - no always-visible markers */}
 
-      {/* Controls with increased zoom limits */}
-      <OrbitControls
-        ref={controlsRef}
-        makeDefault
-        enablePan
-        enableZoom
-        enableRotate
-        minDistance={0.1}  // Much closer zoom
-        maxDistance={500}  // Much further zoom
-        maxPolarAngle={Math.PI * 0.85}
-        target={[0, 0.5, 0]}
-        zoomSpeed={1.5}
+      {/* Cinematic camera controller with creative movements */}
+      <CinematicCameraController
+        targetPosition={cameraTarget?.position || null}
+        targetObject={cameraTarget?.object || null}
+        autoRotate={autoRotate}
+        onAnimationComplete={() => {
+          // Animation complete callback
+        }}
       />
 
       {/* Gizmo helper - only in edit mode */}
@@ -850,6 +960,7 @@ export default function DarkEnhancedModelEditor({
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
   const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
   const [meshGroups, setMeshGroups] = useState<Map<string, string[]>>(new Map());
+  const [groupsSaved, setGroupsSaved] = useState(true);
   const resetViewRef = useRef<(() => void) | null>(null);
 
   // HUD annotation system states
@@ -858,16 +969,14 @@ export default function DarkEnhancedModelEditor({
   const [showHUD, setShowHUD] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('HUD State:', {
-      showHUD,
-      hasClickPosition: !!clickPosition,
-      hasScreenPosition: !!screenPosition,
-      hasSelectedAnnotation: !!selectedAnnotation,
-      hasCanvasRef: !!canvasRef.current
-    });
-  }, [showHUD, clickPosition, screenPosition, selectedAnnotation]);
+  // Camera control states
+  const [cameraTarget, setCameraTarget] = useState<{
+    position: THREE.Vector3;
+    object: THREE.Object3D;
+  } | null>(null);
+  const [autoRotate, setAutoRotate] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showGroundSettings, setShowGroundSettings] = useState(false);
 
   // Initialize store
   const {
@@ -879,6 +988,7 @@ export default function DarkEnhancedModelEditor({
     environment,
     setEnvironment,
     setMaterial,
+    setTransform,
     deleteObject,
     toggleObjectVisibility,
     updateBackground,
@@ -897,7 +1007,51 @@ export default function DarkEnhancedModelEditor({
     setModelId(modelId);
     // Load saved state from database
     loadState(modelId);
-  }, [modelId, setModelId, loadState]);
+
+    // Load saved groups
+    loadGroups(modelId).then((groups) => {
+      setMeshGroups(groups);
+      console.log('Loaded groups from database:', groups);
+    });
+
+    // Reset any model planes that might have been incorrectly marked as deleted
+    setTimeout(() => {
+      meshes.forEach(mesh => {
+        if (mesh.userData?.isModelPlane && mesh.name !== 'Plane12847') {
+          const transform = transforms.get(mesh.name);
+          if (transform?.deleted || transform?.visible === false) {
+            console.log(`Auto-resetting incorrectly hidden plane: ${mesh.name}`);
+            setTransform(mesh.name, {
+              ...transform,
+              visible: true,
+              deleted: false
+            });
+          }
+        }
+      });
+    }, 1000); // Small delay to ensure state is loaded
+
+    // Initialize ground plane material if it doesn't exist
+    if (!materials.has('Plane12847')) {
+      setMaterial('Plane12847', {
+        model_id: modelId,
+        object_name: 'Plane12847',
+        material_type: 'custom',
+        color: { r: 40, g: 40, b: 45, a: 1 }, // Slightly blue-grey
+        properties: {
+          metalness: 0.2,
+          roughness: 0.8,
+          opacity: 1,
+          emissive: { r: 5, g: 5, b: 10, a: 1 },
+          emissiveIntensity: 0.1
+        }
+      });
+      setTransform('Plane12847', {
+        scale: { x: 100, y: 100, z: 1 },
+        visible: true
+      });
+    }
+  }, [modelId, setModelId, loadState, materials, setMaterial, setTransform]);
 
   // Initialize environment separately - only if not set
   useEffect(() => {
@@ -952,6 +1106,20 @@ export default function DarkEnhancedModelEditor({
     setMeshes(loadedMeshes);
   }, []);
 
+  // Apply group associations when meshes or groups change
+  useEffect(() => {
+    if (meshes.length > 0 && meshGroups.size > 0) {
+      meshes.forEach(mesh => {
+        meshGroups.forEach((members, groupName) => {
+          if (members.includes(mesh.name)) {
+            mesh.userData = { ...mesh.userData, group: groupName };
+            console.log(`Restored group association: ${mesh.name} -> ${groupName}`);
+          }
+        });
+      });
+    }
+  }, [meshes, meshGroups]);
+
   // Handle mesh selection from hierarchy panel
   const handleSelectMesh = useCallback((meshName: string) => {
     const mesh = meshes.find(m => m.name === meshName);
@@ -982,7 +1150,7 @@ export default function DarkEnhancedModelEditor({
   }, [meshes, selectObject]);
 
   // Handle grouping meshes
-  const handleGroupMeshes = useCallback((meshNames: string[], groupName: string) => {
+  const handleGroupMeshes = useCallback(async (meshNames: string[], groupName: string) => {
     const newGroups = new Map(meshGroups);
     newGroups.set(groupName, meshNames);
     setMeshGroups(newGroups);
@@ -995,12 +1163,22 @@ export default function DarkEnhancedModelEditor({
       }
     });
 
+    // Save to database
+    try {
+      await updateGroup(modelId, groupName, meshNames);
+      setGroupsSaved(true);
+      console.log('Group saved to database:', groupName);
+    } catch (error) {
+      console.error('Failed to save group:', error);
+      setGroupsSaved(false);
+    }
+
     // Force re-render
     setMeshes([...meshes]);
-  }, [meshes]);
+  }, [meshes, modelId]);
 
   // Handle ungrouping
-  const handleUngroupMeshes = useCallback((groupName: string) => {
+  const handleUngroupMeshes = useCallback(async (groupName: string) => {
     const newGroups = new Map(meshGroups);
     const meshNames = newGroups.get(groupName) || [];
 
@@ -1014,9 +1192,19 @@ export default function DarkEnhancedModelEditor({
     newGroups.delete(groupName);
     setMeshGroups(newGroups);
 
+    // Delete from database
+    try {
+      await deleteGroup(modelId, groupName);
+      setGroupsSaved(true);
+      console.log('Group deleted from database:', groupName);
+    } catch (error) {
+      console.error('Failed to delete group:', error);
+      setGroupsSaved(false);
+    }
+
     // Force re-render
     setMeshes([...meshes]);
-  }, [meshes]);
+  }, [meshes, modelId]);
 
   // Handle renaming
   const handleRenameMesh = useCallback((oldName: string, newName: string) => {
@@ -1235,9 +1423,15 @@ export default function DarkEnhancedModelEditor({
   // Handle save
   const handleSaveAll = async () => {
     try {
+      // Save editor state
       await saveState();
+
+      // Save groups
+      await saveGroups(modelId, meshGroups);
+      setGroupsSaved(true);
+
       onSave();
-      toast.success('All settings saved successfully!', {
+      toast.success('All settings and groups saved successfully!', {
         position: 'bottom-left',
         duration: 3000,
       });
@@ -1254,6 +1448,17 @@ export default function DarkEnhancedModelEditor({
   const handleResetView = () => {
     if (resetViewRef.current) {
       resetViewRef.current();
+    }
+  };
+
+  // Toggle fullscreen
+  const toggleFullscreen = async () => {
+    if (!document.fullscreenElement) {
+      await canvasRef.current?.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      await document.exitFullscreen();
+      setIsFullscreen(false);
     }
   };
 
@@ -1333,13 +1538,66 @@ export default function DarkEnhancedModelEditor({
               clickPosition={clickPosition}
               selectedAnnotation={selectedAnnotation}
               readOnly={true}
+              setCameraTarget={setCameraTarget}
+              cameraTarget={cameraTarget}
+              autoRotate={autoRotate}
             />
             <ScreenPositionUpdater
               clickPosition={clickPosition}
               onScreenPositionUpdate={setScreenPosition}
             />
+            {/* Cinematic camera controller for viewer */}
+            <CinematicCameraController
+              targetPosition={cameraTarget?.position || null}
+              targetObject={cameraTarget?.object || null}
+              autoRotate={autoRotate}
+              onAnimationComplete={() => {
+                // Animation complete callback
+              }}
+            />
           </Suspense>
         </Canvas>
+
+        {/* Floating Controls for Viewer */}
+        {readOnly && (
+          <div className="absolute top-4 left-4 flex flex-col gap-2">
+            {/* Reset View Button */}
+            <button
+              onClick={handleResetView}
+              className="glass-button p-2 rounded-lg text-white hover:text-blue-400 transition-colors"
+              title="Reset View"
+            >
+              <RotateCcw size={20} />
+            </button>
+
+            {/* Drone Mode Toggle - Cinematic Auto-Rotate */}
+            <button
+              onClick={() => setAutoRotate(!autoRotate)}
+              className={`glass-button p-2 rounded-lg transition-all duration-300 ${
+                autoRotate
+                  ? 'text-blue-400 bg-blue-500/20 shadow-lg shadow-blue-500/30 animate-pulse'
+                  : 'text-white hover:text-blue-400'
+              }`}
+              title={autoRotate ? 'Stop Drone Mode' : 'Start Drone Mode (Auto-Rotate)'}
+            >
+              <Plane
+                size={20}
+                className={`transition-transform duration-500 ${
+                  autoRotate ? 'rotate-45' : ''
+                }`}
+              />
+            </button>
+
+            {/* Fullscreen Toggle */}
+            <button
+              onClick={toggleFullscreen}
+              className="glass-button p-2 rounded-lg text-white hover:text-blue-400 transition-colors"
+              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+            >
+              {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+            </button>
+          </div>
+        )}
 
         {/* HUD Annotation Card for read-only viewer */}
         {showHUD && screenPosition && selectedAnnotation && canvasRef.current && (
@@ -1397,10 +1655,22 @@ export default function DarkEnhancedModelEditor({
               clickPosition={clickPosition}
               selectedAnnotation={selectedAnnotation}
               readOnly={false}
+              setCameraTarget={setCameraTarget}
+              cameraTarget={cameraTarget}
+              autoRotate={autoRotate}
             />
             <ScreenPositionUpdater
               clickPosition={clickPosition}
               onScreenPositionUpdate={setScreenPosition}
+            />
+            {/* Cinematic camera controller for editor */}
+            <CinematicCameraController
+              targetPosition={cameraTarget?.position || null}
+              targetObject={cameraTarget?.object || null}
+              autoRotate={autoRotate}
+              onAnimationComplete={() => {
+                // Animation complete callback
+              }}
             />
           </Suspense>
         </Canvas>
@@ -1414,6 +1684,24 @@ export default function DarkEnhancedModelEditor({
             title="Reset View (Home)"
           >
             <RotateCcw size={20} />
+          </button>
+
+          {/* Drone Mode Toggle - Cinematic Auto-Rotate */}
+          <button
+            onClick={() => setAutoRotate(!autoRotate)}
+            className={`glass-button p-2 rounded-lg transition-all duration-300 ${
+              autoRotate
+                ? 'text-blue-400 bg-blue-500/20 shadow-lg shadow-blue-500/30'
+                : 'text-white hover:text-blue-400'
+            }`}
+            title={autoRotate ? 'Disable Drone Mode' : 'Enable Drone Mode'}
+          >
+            <Plane
+              size={20}
+              className={`transition-transform duration-300 ${
+                autoRotate ? 'rotate-45' : ''
+              }`}
+            />
           </button>
 
           {/* Zoom Controls */}
@@ -1535,6 +1823,21 @@ export default function DarkEnhancedModelEditor({
                 </button>
               </div>
 
+              {/* Ground Settings Button */}
+              <button
+                onClick={() => setShowGroundSettings(!showGroundSettings)}
+                className={`w-full mt-3 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-all ${
+                  showGroundSettings
+                    ? 'glass-button-primary text-white'
+                    : 'glass-button text-gray-400 hover:text-white'
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Ground Settings
+              </button>
+
               {/* Panel Tabs */}
               <div className="flex gap-1 mt-4">
                 {[
@@ -1566,7 +1869,119 @@ export default function DarkEnhancedModelEditor({
         {/* Panel Content */}
         {!isPanelCollapsed && (
           <div className="flex-1 overflow-y-auto p-4 dark-scrollbar">
-            {activePanel === 'material' && selectedObjectName && (
+            {/* Ground Settings Panel */}
+            {showGroundSettings && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-white">Ground Plane Settings</h3>
+                  <button
+                    onClick={() => setShowGroundSettings(false)}
+                    className="p-1 hover:bg-white/10 rounded transition-colors"
+                  >
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Material Settings for Ground */}
+                <MaterialPanel
+                  objectName="Plane12847"
+                  material={materials.get("Plane12847") || {
+                    model_id: modelId,
+                    object_name: 'Plane12847',
+                    material_type: 'custom',
+                    color: { r: 40, g: 40, b: 45, a: 1 },
+                    properties: {
+                      metalness: 0.2,
+                      roughness: 0.8,
+                      opacity: 1,
+                      emissive: { r: 5, g: 5, b: 10, a: 1 },
+                      emissiveIntensity: 0.1
+                    }
+                  }}
+                  onChange={(newMaterial) => {
+                    setMaterial("Plane12847", newMaterial);
+                    toast.success('Ground plane updated', {
+                      position: 'bottom-left',
+                      duration: 2000,
+                    });
+                  }}
+                />
+
+                {/* Visibility Toggle */}
+                <div className="glass-panel-light rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-300">Ground Visibility</span>
+                    <button
+                      onClick={() => toggleObjectVisibility("Plane12847")}
+                      className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+                        transforms.get("Plane12847")?.visible !== false
+                          ? 'bg-blue-500/20 text-blue-400'
+                          : 'bg-gray-600/20 text-gray-400'
+                      }`}
+                    >
+                      {transforms.get("Plane12847")?.visible !== false ? 'Visible' : 'Hidden'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Scale Adjustment */}
+                <div className="glass-panel-light rounded-lg p-4">
+                  <label className="text-sm text-gray-300 mb-2 block">Ground Scale</label>
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    value={transforms.get("Plane12847")?.scale?.x || 50}
+                    onChange={(e) => {
+                      const scale = parseFloat(e.target.value);
+                      setTransform("Plane12847", {
+                        scale: { x: scale, y: scale, z: 1 }
+                      });
+                    }}
+                    className="w-full"
+                  />
+                  <div className="text-xs text-gray-400 mt-1">
+                    Scale: {transforms.get("Plane12847")?.scale?.x || 50}x
+                  </div>
+                </div>
+
+                {/* Reset Ground */}
+                <button
+                  onClick={() => {
+                    // Reset ground to defaults
+                    setMaterial("Plane12847", {
+                      model_id: modelId,
+                      object_name: 'Plane12847',
+                      material_type: 'custom',
+                      color: { r: 40, g: 40, b: 45, a: 1 },
+                      properties: {
+                        metalness: 0.2,
+                        roughness: 0.8,
+                        opacity: 1,
+                        emissive: { r: 5, g: 5, b: 10, a: 1 },
+                        emissiveIntensity: 0.1
+                      },
+                      texture_url: undefined
+                    });
+                    setTransform("Plane12847", {
+                      scale: { x: 50, y: 50, z: 1 },
+                      visible: true
+                    });
+                    toast.success('Ground plane reset to defaults', {
+                      position: 'bottom-left',
+                      duration: 2000,
+                    });
+                  }}
+                  className="w-full py-2 glass-button rounded-lg text-gray-400 hover:text-white transition-colors"
+                >
+                  Reset to Defaults
+                </button>
+              </div>
+            )}
+
+            {activePanel === 'material' && selectedObjectName && !showGroundSettings && (
               <div>
                 {/* Action buttons for selected object */}
                 <div className="flex gap-2 mb-4">
@@ -1628,7 +2043,7 @@ export default function DarkEnhancedModelEditor({
               </div>
             )}
 
-            {activePanel === 'environment' && environment && (
+            {activePanel === 'environment' && environment && !showGroundSettings && (
               <EnvironmentPanel
                 environment={environment}
                 onChange={(updatedEnvironment) => {
@@ -1637,7 +2052,7 @@ export default function DarkEnhancedModelEditor({
               />
             )}
 
-            {activePanel === 'annotations' && (
+            {activePanel === 'annotations' && !showGroundSettings && (
               <div>
                 {showAnnotationPanel && selectedAnnotation ? (
                   <AnnotationPanel

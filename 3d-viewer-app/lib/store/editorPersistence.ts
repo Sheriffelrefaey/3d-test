@@ -181,7 +181,10 @@ export async function loadEnvironment(modelId: string): Promise<ModelEnvironment
     .single();
 
   if (error) {
-    console.error('Error loading environment:', error);
+    // Don't log error if it's just that no row exists (PGRST116)
+    if (error.code !== 'PGRST116') {
+      console.error('Error loading environment:', error);
+    }
     return null;
   }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Line } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
@@ -14,205 +14,373 @@ interface HUDAnnotationProps {
   isVisible: boolean;
 }
 
-// 2D HUD Component for the annotation card
+// Enhanced Typewriter with high-quality rendering
+function TypewriterText({ text }: { text: string }) {
+  const [displayText, setDisplayText] = useState('');
+
+  useEffect(() => {
+    setDisplayText('');
+    let index = 0;
+    const interval = setInterval(() => {
+      if (index <= text.length) {
+        setDisplayText(text.slice(0, index));
+        index++;
+      } else {
+        clearInterval(interval);
+      }
+    }, 12); // Smoother at 12ms per character
+
+    return () => clearInterval(interval);
+  }, [text]);
+
+  return (
+    <span style={{
+      textRendering: 'optimizeLegibility',
+      WebkitFontSmoothing: 'antialiased',
+      MozOsxFontSmoothing: 'grayscale'
+    }}>
+      {displayText}
+      {displayText.length < text.length && (
+        <span className="opacity-50 animate-pulse">|</span>
+      )}
+    </span>
+  );
+}
+
+// Enhanced Futuristic White HUD Component
 export function HUDAnnotationCard({ annotation, screenPosition, onClose, isVisible }: {
   annotation: Annotation | null;
   screenPosition: { x: number; y: number } | null;
   onClose: () => void;
   isVisible: boolean;
 }) {
-  if (!annotation || !screenPosition || !isVisible) return null;
+  const [showText, setShowText] = useState(false);
+  const [titleText, setTitleText] = useState('');
+  const [descText, setDescText] = useState('');
 
-  // Position card above the object, centered horizontally with bounds checking
-  const cardWidth = 350;
-  const cardHeight = 200;
-  const margin = 20;
+  useEffect(() => {
+    if (isVisible && annotation) {
+      // Reset states for animation on every change
+      setShowText(false);
+      setTitleText('');
+      setDescText('');
 
-  // Calculate initial position (centered above object)
-  let cardX = screenPosition.x - cardWidth / 2;
-  let cardY = screenPosition.y - cardHeight - 100; // Position above with spacing
+      // Delay text reveal after lines animation
+      const textTimer = setTimeout(() => {
+        setShowText(true);
 
-  // Bounds checking to keep card within viewport
-  if (cardX < margin) cardX = margin;
-  if (cardX + cardWidth > window.innerWidth - margin) {
-    cardX = window.innerWidth - cardWidth - margin;
-  }
-  if (cardY < margin) cardY = margin;
-  if (cardY + cardHeight > window.innerHeight - margin) {
-    cardY = window.innerHeight - cardHeight - margin;
-  }
+        // Smooth text reveal for title
+        const title = annotation.title || annotation.object_name || 'Object';
+        let titleIndex = 0;
+        const titleInterval = setInterval(() => {
+          if (titleIndex <= title.length) {
+            setTitleText(title.slice(0, titleIndex));
+            titleIndex++;
+          } else {
+            clearInterval(titleInterval);
+          }
+        }, 30);
+
+        // Smooth text reveal for description
+        if (annotation.description) {
+          const desc = annotation.description;
+          let descIndex = 0;
+          const descInterval = setInterval(() => {
+            if (descIndex <= desc.length) {
+              setDescText(desc.slice(0, descIndex));
+              descIndex++;
+            } else {
+              clearInterval(descInterval);
+            }
+          }, 15);
+          return () => clearInterval(descInterval);
+        }
+
+        return () => clearInterval(titleInterval);
+      }, 600);
+
+      return () => clearTimeout(textTimer);
+    }
+  }, [isVisible, annotation?.id]); // Trigger on annotation ID change
+
+  if (!annotation || !isVisible) return null;
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       {isVisible && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
           style={{
             position: 'fixed',
-            left: `${cardX}px`,
-            top: `${cardY}px`,
+            right: '30px',
+            bottom: '30px',
             zIndex: 1000,
+            width: '380px'
           }}
-          className="pointer-events-none"
+          className="pointer-events-auto"
         >
-          {/* Connection Line from top of object to bottom of card */}
-          <svg
-            style={{
-              position: 'absolute',
-              left: '50%',
-              bottom: '-100px', // Line starts from bottom of card
-              transform: 'translateX(-50%)',
-              width: '2px',
-              height: '100px',
-              overflow: 'visible',
-              pointerEvents: 'none'
-            }}
-          >
-            <defs>
-              <linearGradient id="lineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgba(59, 130, 246, 1)" />
-                <stop offset="100%" stopColor="rgba(59, 130, 246, 0.3)" />
-              </linearGradient>
-            </defs>
-            <motion.line
-              x1="1"
-              y1="0"
-              x2="1"
-              y2="100"
-              stroke="url(#lineGradient)"
-              strokeWidth="2"
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            />
-            <motion.circle
-              cx="1"
-              cy="100"
-              r="4"
-              fill="rgba(59, 130, 246, 1)"
-              initial={{ scale: 0 }}
-              animate={{ scale: [0, 1.5, 1] }}
-              transition={{ duration: 0.5, delay: 0.4, ease: "easeOut" }}
-            />
-          </svg>
-
-          {/* HUD Card */}
-          <motion.div
-            className="relative bg-gray-900/90 backdrop-blur-md rounded-lg border border-blue-500/50 shadow-2xl overflow-hidden pointer-events-auto"
-            style={{
-              width: '350px',
-              minHeight: '180px',
-              boxShadow: '0 0 30px rgba(59, 130, 246, 0.3), inset 0 0 20px rgba(59, 130, 246, 0.1)'
-            }}
-          >
-            {/* Animated border glow */}
+          {/* Animated glowing lines container */}
+          <div className="relative">
+            {/* Top glowing line base */}
             <motion.div
-              className="absolute inset-0 rounded-lg"
-              style={{
-                background: 'linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.5), transparent)',
-                pointerEvents: 'none'
-              }}
+              key={`top-${annotation?.id}`}
+              initial={{ scaleX: 0, opacity: 0 }}
               animate={{
-                x: ['-100%', '100%']
+                scaleX: [0, 1.05, 1],
+                opacity: [0, 1, 0.8],
               }}
               transition={{
-                duration: 3,
-                repeat: Infinity,
-                ease: "linear"
+                duration: 0.7,
+                times: [0, 0.7, 1],
+                ease: "easeOut"
+              }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '2px',
+                background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.9) 10%, rgba(255, 255, 255, 0.9) 90%, transparent 100%)',
+                transformOrigin: 'left',
+                boxShadow: '0 0 15px rgba(255, 255, 255, 0.5), 0 0 30px rgba(255, 255, 255, 0.3)',
+                zIndex: 2
               }}
             />
 
-            {/* Top accent lines */}
-            <div className="relative">
-              <motion.div
-                className="h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent"
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
+            {/* Moving light beam on top line - travels left to right */}
+            <motion.div
+              key={`top-beam-${annotation?.id}`}
+              initial={{ x: '-30%', opacity: 0 }}
+              animate={{
+                x: ['0%', '100%'],
+                opacity: [0, 1, 1, 0],
+              }}
+              transition={{
+                duration: 0.8,
+                times: [0, 0.1, 0.9, 1],
+                ease: "linear",
+                delay: 0.3
+              }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '2px',
+                overflow: 'hidden',
+                zIndex: 3
+              }}
+            >
+              <div
+                style={{
+                  width: '30%',
+                  height: '100%',
+                  background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 1), rgba(255, 255, 255, 1), transparent)',
+                  boxShadow: '0 0 20px rgba(255, 255, 255, 1), 0 0 40px rgba(255, 255, 255, 0.7)',
+                  filter: 'blur(0.5px)'
+                }}
+              />
+            </motion.div>
+
+            {/* Bottom glowing line base */}
+            <motion.div
+              key={`bottom-${annotation?.id}`}
+              initial={{ scaleX: 0, opacity: 0 }}
+              animate={{
+                scaleX: [0, 1.05, 1],
+                opacity: [0, 1, 0.8],
+              }}
+              transition={{
+                duration: 0.7,
+                times: [0, 0.7, 1],
+                ease: "easeOut",
+                delay: 0.1
+              }}
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: '2px',
+                background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.9) 10%, rgba(255, 255, 255, 0.9) 90%, transparent 100%)',
+                transformOrigin: 'right',
+                boxShadow: '0 0 15px rgba(255, 255, 255, 0.5), 0 0 30px rgba(255, 255, 255, 0.3)',
+                zIndex: 2
+              }}
+            />
+
+            {/* Moving light beam on bottom line - travels right to left */}
+            <motion.div
+              key={`bottom-beam-${annotation?.id}`}
+              initial={{ x: '100%', opacity: 0 }}
+              animate={{
+                x: ['70%', '-30%'],
+                opacity: [0, 1, 1, 0],
+              }}
+              transition={{
+                duration: 0.8,
+                times: [0, 0.1, 0.9, 1],
+                ease: "linear",
+                delay: 0.4
+              }}
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: '2px',
+                overflow: 'hidden',
+                zIndex: 3
+              }}
+            >
+              <div
+                style={{
+                  width: '30%',
+                  height: '100%',
+                  marginLeft: 'auto',
+                  background: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 1), rgba(255, 255, 255, 1), transparent)',
+                  boxShadow: '0 0 20px rgba(255, 255, 255, 1), 0 0 40px rgba(255, 255, 255, 0.7)',
+                  filter: 'blur(0.5px)'
+                }}
+              />
+            </motion.div>
+
+            {/* Flash effect overlay */}
+            <motion.div
+              key={`flash-${annotation?.id}`}
+              initial={{ opacity: 0 }}
+              animate={{
+                opacity: [0, 0.4, 0, 0.3, 0],
+              }}
+              transition={{
+                duration: 0.8,
+                times: [0, 0.2, 0.4, 0.6, 1],
+              }}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'radial-gradient(circle, rgba(255, 255, 255, 0.6), transparent)',
+                pointerEvents: 'none'
+              }}
+            />
+
+            {/* Main HUD Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+              style={{
+                background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(10, 10, 10, 0.5) 100%)',
+                backdropFilter: 'blur(30px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(30px) saturate(180%)',
+                borderRadius: '4px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+                borderLeft: 'none',
+                borderRight: 'none',
+                padding: '20px 24px',
+                boxShadow: `
+                  0 0 80px rgba(255, 255, 255, 0.1),
+                  0 0 160px rgba(255, 255, 255, 0.05),
+                  0 10px 40px rgba(0, 0, 0, 0.6),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.15)
+                `,
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+            >
+              {/* Shimmer effect overlay */}
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: `linear-gradient(
+                    105deg,
+                    transparent 40%,
+                    rgba(255, 255, 255, 0.1) 50%,
+                    transparent 60%
+                  )`,
+                  animation: 'shimmer 3s infinite'
+                }}
               />
 
-              {/* Header */}
-              <div className="px-4 py-3 bg-blue-950/50 border-b border-blue-500/30">
-                <div className="flex items-center justify-between">
-                  <motion.h3
-                    className="text-blue-100 font-bold text-sm uppercase tracking-wider"
-                    initial={{ x: -20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    transition={{ duration: 0.3, delay: 0.3 }}
-                  >
-                    {annotation.title || annotation.object_name || 'Object Details'}
-                  </motion.h3>
-                  <motion.button
-                    onClick={onClose}
-                    className="text-blue-400 hover:text-blue-200 transition-colors p-1"
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </motion.button>
-                </div>
-              </div>
+              <style jsx>{`
+                @keyframes shimmer {
+                  0% { transform: translateX(-100%); }
+                  100% { transform: translateX(200%); }
+                }
+                @keyframes textGlow {
+                  0%, 100% {
+                    textShadow:
+                      0 0 40px rgba(255, 255, 255, 0.4),
+                      0 0 80px rgba(255, 255, 255, 0.2),
+                      0 0 120px rgba(255, 255, 255, 0.1);
+                  }
+                  50% {
+                    textShadow:
+                      0 0 50px rgba(255, 255, 255, 0.5),
+                      0 0 90px rgba(255, 255, 255, 0.25),
+                      0 0 130px rgba(255, 255, 255, 0.15);
+                  }
+                }
+              `}</style>
 
-              {/* Content */}
-              <div className="p-4 space-y-3">
-                {annotation.object_name && (
-                  <motion.div
-                    initial={{ y: 10, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ duration: 0.3, delay: 0.4 }}
-                  >
-                    <label className="text-xs text-blue-400 uppercase tracking-wider">Component</label>
-                    <p className="text-sm text-gray-100 mt-1 font-mono">{annotation.object_name}</p>
-                  </motion.div>
-                )}
-
-                {annotation.description && (
-                  <motion.div
-                    initial={{ y: 10, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ duration: 0.3, delay: 0.5 }}
-                  >
-                    <label className="text-xs text-blue-400 uppercase tracking-wider">Details</label>
-                    <p className="text-sm text-gray-200 mt-1 leading-relaxed">{annotation.description}</p>
-                  </motion.div>
-                )}
-
-                {/* Position Info */}
-                <motion.div
-                  className="pt-2 border-t border-blue-500/20"
-                  initial={{ y: 10, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ duration: 0.3, delay: 0.6 }}
+              <div className="relative z-10">
+                <motion.h3
+                  initial={{ opacity: 0, filter: 'blur(10px)' }}
+                  animate={{
+                    opacity: showText ? 1 : 0,
+                    filter: showText ? 'blur(0px)' : 'blur(10px)'
+                  }}
+                  transition={{ duration: 0.5 }}
+                  className="text-white font-bold text-xl mb-2 leading-tight"
+                  style={{
+                    textShadow: `
+                      0 0 40px rgba(255, 255, 255, 0.4),
+                      0 0 80px rgba(255, 255, 255, 0.2),
+                      0 0 120px rgba(255, 255, 255, 0.1),
+                      0 2px 4px rgba(0, 0, 0, 0.8)
+                    `,
+                    animation: 'textGlow 2s ease-in-out infinite',
+                    letterSpacing: '0.5px',
+                    filter: 'blur(0.2px)'
+                  }}
                 >
-                  <label className="text-xs text-blue-400 uppercase tracking-wider">Coordinates</label>
-                  <div className="flex gap-3 mt-1">
-                    <span className="text-xs font-mono text-gray-400">
-                      X: <span className="text-blue-300">{annotation.position_x.toFixed(2)}</span>
-                    </span>
-                    <span className="text-xs font-mono text-gray-400">
-                      Y: <span className="text-blue-300">{annotation.position_y.toFixed(2)}</span>
-                    </span>
-                    <span className="text-xs font-mono text-gray-400">
-                      Z: <span className="text-blue-300">{annotation.position_z.toFixed(2)}</span>
-                    </span>
-                  </div>
-                </motion.div>
+                  {titleText}
+                  {showText && titleText.length < (annotation.title || annotation.object_name || 'Object').length && (
+                    <span className="opacity-50">|</span>
+                  )}
+                </motion.h3>
+                {annotation.description && (
+                  <motion.p
+                    initial={{ opacity: 0, filter: 'blur(10px)' }}
+                    animate={{
+                      opacity: showText ? 0.95 : 0,
+                      filter: showText ? 'blur(0px)' : 'blur(10px)'
+                    }}
+                    transition={{ duration: 0.5, delay: 0.1 }}
+                    className="text-gray-200 text-base leading-relaxed"
+                    style={{
+                      textShadow: `
+                        0 0 30px rgba(255, 255, 255, 0.25),
+                        0 0 60px rgba(255, 255, 255, 0.1),
+                        0 2px 10px rgba(0, 0, 0, 0.8)
+                      `,
+                      letterSpacing: '0.3px',
+                      filter: 'blur(0.1px)'
+                    }}
+                  >
+                    {descText}
+                    {showText && descText.length < annotation.description.length && (
+                      <span className="opacity-30">|</span>
+                    )}
+                  </motion.p>
+                )}
               </div>
-
-              {/* Bottom accent */}
-              <motion.div
-                className="h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent"
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: 1 }}
-                transition={{ duration: 0.5, delay: 0.7 }}
-              />
-            </div>
-          </motion.div>
+            </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
@@ -226,7 +394,7 @@ export function ObjectGlowEffect({ mesh, isActive }: { mesh: THREE.Mesh | null; 
 
   useFrame(({ clock }) => {
     if (glowRef.current && isActive) {
-      // Pulsing glow effect
+      // Smoother pulsing glow effect
       const pulse = Math.sin(clock.getElapsedTime() * 2) * 0.5 + 0.5;
       glowRef.current.material.emissiveIntensity = 0.3 + pulse * 0.3;
       glowRef.current.material.opacity = 0.3 + pulse * 0.2;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import * as Slider from '@radix-ui/react-slider';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import * as Select from '@radix-ui/react-select';
@@ -43,6 +43,13 @@ export default function MaterialPanel({
   );
   const [texturePreview, setTexturePreview] = useState<string | null>(material?.texture_url || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Initialize texture preview from existing texture_url
+  useEffect(() => {
+    if (material?.texture_url && !texturePreview) {
+      setTexturePreview(material.texture_url);
+    }
+  }, [material?.texture_url]);
 
   const toggleSection = (section: string) => {
     const newExpanded = new Set(expandedSections);
