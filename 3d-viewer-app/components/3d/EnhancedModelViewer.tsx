@@ -266,6 +266,7 @@ function ViewerScene({
               console.error('Texture URL:', material.texture_url);
             }
           );
+        }
       }
     });
   }, [materials, meshes]);

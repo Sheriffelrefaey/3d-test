@@ -457,6 +457,7 @@ function EnhancedScene({
               console.error('Texture URL:', material.texture_url);
             }
           );
+        }
       } else {
         // No material override, use original
         mesh.material = mesh.userData.originalMaterial || mesh.material;
