@@ -10,9 +10,9 @@ import {
   Bounds,
   Center
 } from '@react-three/drei';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import type { Annotation } from '@/types';
+import { getGLTFLoader } from '@/lib/three/loaders';
 
 interface ModelViewerWithAnnotationsProps {
   modelUrl: string;
@@ -77,7 +77,7 @@ function ModelWithAnnotations({
   annotations: Annotation[];
   onAnnotationClick: (annotation: Annotation) => void;
 }) {
-  const gltf = useLoader(GLTFLoader, modelUrl);
+  const gltf = useLoader(getGLTFLoader, modelUrl);
   const { camera } = useThree();
   const [_meshes, setMeshes] = useState<THREE.Mesh[]>([]);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { use, useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase/client';
@@ -16,12 +16,13 @@ const ModelEditor = dynamic(() => import('@/components/3d/ModelEditor'), {
 });
 
 interface EditPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default function EditModelPage({ params }: EditPageProps) {
+  const resolvedParams = use(params);
   const [model, setModel] = useState<Model | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +35,7 @@ export default function EditModelPage({ params }: EditPageProps) {
       const { data: modelData, error: modelError } = await supabase
         .from('models')
         .select('*')
-        .eq('id', params.id)
+        .eq('id', resolvedParams.id)
         .single();
 
       if (modelError) throw modelError;
@@ -44,7 +45,7 @@ export default function EditModelPage({ params }: EditPageProps) {
       const { data: annotationData, error: annotationError } = await supabase
         .from('annotations')
         .select('*')
-        .eq('model_id', params.id);
+        .eq('model_id', resolvedParams.id);
 
       if (annotationError) throw annotationError;
       setAnnotations(annotationData || []);
@@ -53,7 +54,7 @@ export default function EditModelPage({ params }: EditPageProps) {
     } finally {
       setLoading(false);
     }
-  }, [params.id]);
+  }, [resolvedParams.id]);
 
   useEffect(() => {
     fetchModelData();
@@ -66,14 +67,14 @@ export default function EditModelPage({ params }: EditPageProps) {
       const { error: deleteError } = await supabase
         .from('annotations')
         .delete()
-        .eq('model_id', params.id);
+        .eq('model_id', resolvedParams.id);
 
       if (deleteError) throw deleteError;
 
       // Insert new annotations
       if (updatedAnnotations.length > 0) {
         const annotationsToInsert = updatedAnnotations.map(ann => ({
-          model_id: params.id,
+          model_id: resolvedParams.id,
           object_name: ann.object_name,
           title: ann.title,
           description: ann.description,
@@ -135,7 +136,7 @@ export default function EditModelPage({ params }: EditPageProps) {
                 Cancel
               </button>
               <button
-                onClick={() => router.push(`/viewer/${params.id}`)}
+                onClick={() => router.push(`/viewer/${resolvedParams.id}`)}
                 className="px-4 py-2 border border-blue-500 text-blue-500 rounded-md hover:bg-blue-50"
               >
                 Preview

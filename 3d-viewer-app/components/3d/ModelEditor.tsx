@@ -11,10 +11,10 @@ import {
   GizmoViewport,
   Html
 } from '@react-three/drei';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import type { Annotation } from '@/types';
 import AnnotationPanel from '@/components/ui/AnnotationPanel';
+import { getGLTFLoader } from '@/lib/three/loaders';
 
 interface ModelEditorProps {
   modelUrl: string;
@@ -100,7 +100,7 @@ function Scene({
   selectedAnnotation: Annotation | null;
   onAnnotationPositionChange: (annotation: Annotation, position: THREE.Vector3) => void;
 }) {
-  const gltf = useLoader(GLTFLoader, modelUrl);
+  const gltf = useLoader(getGLTFLoader, modelUrl);
   const { camera } = useThree();
   const [meshes, setMeshes] = useState<THREE.Object3D[]>([]);
 
