@@ -41,13 +41,15 @@ export default function ModelViewer({ modelUrl, children }: ModelViewerProps) {
           {/* Add white fog for better depth perception */}
           <fog attach="fog" args={['#f5f5f5', 15, 60]} />
 
-          <PerspectiveCamera makeDefault position={[5, 5, 5]} fov={50} />
+          <PerspectiveCamera makeDefault position={[15, 10, 15]} fov={50} />
           <OrbitControls
             enablePan={true}
             enableZoom={true}
             enableRotate={true}
-            minDistance={2}
-            maxDistance={20}
+            minDistance={0.5}
+            maxDistance={100}
+            maxPolarAngle={Math.PI * 0.85}
+            target={[0, 2, 0]}
           />
 
           {/* Enhanced lighting setup for better visibility */}

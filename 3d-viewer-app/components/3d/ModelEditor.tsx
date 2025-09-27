@@ -123,14 +123,18 @@ function Scene({
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z);
-    const scale = 5 / maxDim;
+    const scale = 10 / maxDim; // Increased scale for better visibility
 
-    gltf.scene.position.sub(center.multiplyScalar(scale));
+    // Center the model on X and Z, but place it on the grid (Y=0)
+    gltf.scene.position.x = -center.x * scale;
+    gltf.scene.position.z = -center.z * scale;
+    gltf.scene.position.y = -box.min.y * scale; // Place bottom of model on grid
     gltf.scene.scale.setScalar(scale);
 
-    // Adjust camera
-    camera.position.set(5, 5, 5);
-    camera.lookAt(0, 0, 0);
+    // Adjust camera for better initial view
+    const dist = Math.max(size.x, size.z) * scale;
+    camera.position.set(dist, dist * 0.7, dist);
+    camera.lookAt(0, size.y * scale / 2, 0);
   }, [gltf, camera]);
 
   return (
@@ -220,7 +224,16 @@ function Scene({
       )}
 
       {/* Controls */}
-      <OrbitControls makeDefault enablePan enableZoom enableRotate />
+      <OrbitControls
+        makeDefault
+        enablePan
+        enableZoom
+        enableRotate
+        minDistance={0.5}
+        maxDistance={100}
+        maxPolarAngle={Math.PI * 0.85}
+        target={[0, 2, 0]}
+      />
       <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
         <GizmoViewport />
       </GizmoHelper>
