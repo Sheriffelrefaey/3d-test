@@ -13,15 +13,18 @@ export interface Model {
 export interface Annotation {
   id: string;
   model_id: string;
+  object_name: string;
   title: string;
   description?: string;
-  position: { x: number; y: number; z: number };
+  position_x: number;
+  position_y: number;
+  position_z: number;
   normal?: { x: number; y: number; z: number };
   color?: string;
   icon?: string;
   metadata?: Record<string, unknown>;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
   created_by?: string;
 }
 

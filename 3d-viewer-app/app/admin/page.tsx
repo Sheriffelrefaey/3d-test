@@ -329,7 +329,7 @@ export default function AdminPage() {
                         View
                       </button>
                       <button
-                        onClick={() => { /* Edit functionality not implemented yet */ }}
+                        onClick={() => router.push(`/admin/edit/${model.id}`)}
                         className="flex-1 py-2 rounded-lg glass border border-purple-500/50 text-purple-400 hover:bg-purple-500/10 transition-all flex items-center justify-center gap-1"
                       >
                         <Edit className="w-4 h-4" />
@@ -373,7 +373,7 @@ export default function AdminPage() {
                       <Eye className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => { /* Edit functionality not implemented yet */ }}
+                      onClick={() => router.push(`/admin/edit/${model.id}`)}
                       className="p-2 rounded-lg glass border border-purple-500/50 text-purple-400 hover:bg-purple-500/10 transition-all"
                     >
                       <Edit className="w-4 h-4" />

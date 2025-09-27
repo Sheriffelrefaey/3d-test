@@ -7,12 +7,13 @@ import type { Annotation } from '@/types';
 import { Maximize2, Home, Settings, X, Eye, EyeOff, RotateCw, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
-const ModelViewer = dynamic(() => import('@/components/3d/ModelViewer'), {
+const ModelViewerWithAnnotations = dynamic(() => import('@/components/3d/ModelViewerWithAnnotations'), {
   ssr: false,
-});
-
-const AnnotationMarker = dynamic(() => import('@/components/3d/AnnotationMarker'), {
-  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-lg">Loading 3D Model...</div>
+    </div>
+  ),
 });
 
 interface ViewerPageProps {
@@ -68,20 +69,8 @@ export default function ViewerPage({ params }: ViewerPageProps) {
         if (!annotationsError && annotationsData) {
           setAnnotations(annotationsData);
         } else {
-          // Use demo annotations if none exist
-          const demoAnnotations: Annotation[] = [
-            {
-              id: '1',
-              model_id: resolvedParams.id,
-              title: 'Point of Interest 1',
-              description: 'Click to add real annotations to this model',
-              position: { x: 1, y: 1, z: 0 },
-              color: '#3B82F6',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            },
-          ];
-          setAnnotations(demoAnnotations);
+          // No annotations found, leave empty
+          setAnnotations([]);
         }
       } catch (err) {
         console.error('Error fetching model:', err);
@@ -236,15 +225,10 @@ export default function ViewerPage({ params }: ViewerPageProps) {
       <div className="flex-1 flex overflow-hidden">
         {/* 3D Viewer */}
         <div className="flex-1 relative">
-          <ModelViewer modelUrl={model.file_url}>
-            {showAnnotations && annotations.map((annotation) => (
-              <AnnotationMarker
-                key={annotation.id}
-                annotation={annotation}
-                onClick={setSelectedAnnotation}
-              />
-            ))}
-          </ModelViewer>
+          <ModelViewerWithAnnotations
+            modelUrl={model.file_url}
+            annotations={showAnnotations ? annotations : []}
+          />
 
           {/* Controls overlay */}
           <div className="absolute bottom-4 left-4 glass rounded-lg p-3 text-xs text-gray-400">
@@ -264,8 +248,7 @@ export default function ViewerPage({ params }: ViewerPageProps) {
                 <div className="glass rounded-xl p-4 mb-6 border border-blue-500/30 bg-blue-500/10">
                   <div className="flex items-start justify-between mb-3">
                     <div
-                      className="w-3 h-3 rounded-full mt-1"
-                      style={{ backgroundColor: selectedAnnotation.color }}
+                      className="w-3 h-3 rounded-full mt-1 bg-red-500"
                     />
                     <button
                       onClick={() => setSelectedAnnotation(null)}
@@ -300,8 +283,7 @@ export default function ViewerPage({ params }: ViewerPageProps) {
                     >
                       <div className="flex items-start gap-3">
                         <div
-                          className="w-3 h-3 rounded-full mt-1 flex-shrink-0"
-                          style={{ backgroundColor: annotation.color }}
+                          className="w-3 h-3 rounded-full mt-1 flex-shrink-0 bg-red-500"
                         />
                         <div className="flex-1">
                           <p className="font-medium text-sm text-white">{annotation.title}</p>

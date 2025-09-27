@@ -1,0 +1,166 @@
+'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+import { supabase } from '@/lib/supabase/client';
+import type { Model, Annotation } from '@/types';
+
+const ModelEditor = dynamic(() => import('@/components/3d/ModelEditor'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-screen">
+      <div className="text-lg">Loading 3D Editor...</div>
+    </div>
+  ),
+});
+
+interface EditPageProps {
+  params: {
+    id: string;
+  };
+}
+
+export default function EditModelPage({ params }: EditPageProps) {
+  const [model, setModel] = useState<Model | null>(null);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const router = useRouter();
+
+  const fetchModelData = useCallback(async () => {
+    try {
+      // Fetch model details
+      const { data: modelData, error: modelError } = await supabase
+        .from('models')
+        .select('*')
+        .eq('id', params.id)
+        .single();
+
+      if (modelError) throw modelError;
+      setModel(modelData);
+
+      // Fetch existing annotations
+      const { data: annotationData, error: annotationError } = await supabase
+        .from('annotations')
+        .select('*')
+        .eq('model_id', params.id);
+
+      if (annotationError) throw annotationError;
+      setAnnotations(annotationData || []);
+    } catch (error) {
+      console.error('Error fetching model data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [params.id]);
+
+  useEffect(() => {
+    fetchModelData();
+  }, [fetchModelData]);
+
+  const handleSaveAnnotations = async (updatedAnnotations: Annotation[]) => {
+    setSaving(true);
+    try {
+      // Delete existing annotations
+      const { error: deleteError } = await supabase
+        .from('annotations')
+        .delete()
+        .eq('model_id', params.id);
+
+      if (deleteError) throw deleteError;
+
+      // Insert new annotations
+      if (updatedAnnotations.length > 0) {
+        const annotationsToInsert = updatedAnnotations.map(ann => ({
+          model_id: params.id,
+          object_name: ann.object_name,
+          title: ann.title,
+          description: ann.description,
+          position_x: ann.position_x,
+          position_y: ann.position_y,
+          position_z: ann.position_z,
+        }));
+
+        const { error: insertError } = await supabase
+          .from('annotations')
+          .insert(annotationsToInsert);
+
+        if (insertError) throw insertError;
+      }
+
+      // Success feedback
+      console.error('Annotations saved successfully!');
+
+      // Fetch updated annotations to sync IDs
+      await fetchModelData();
+    } catch (error) {
+      console.error('Error saving annotations:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-lg">Loading model...</div>
+      </div>
+    );
+  }
+
+  if (!model) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-lg">Model not found</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-100">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div>
+              <h1 className="text-2xl font-bold">Edit Model: {model.name}</h1>
+              <p className="text-gray-600">Click on objects to add annotations</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => router.push('/admin')}
+                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => router.push(`/viewer/${params.id}`)}
+                className="px-4 py-2 border border-blue-500 text-blue-500 rounded-md hover:bg-blue-50"
+              >
+                Preview
+              </button>
+              <button
+                onClick={() => handleSaveAnnotations(annotations)}
+                disabled={saving}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save Annotations'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3D Editor */}
+      <div className="flex-1 relative">
+        <ModelEditor
+          modelUrl={model.file_url}
+          annotations={annotations}
+          onAnnotationsChange={setAnnotations}
+          onSave={handleSaveAnnotations}
+        />
+      </div>
+    </div>
+  );
+}

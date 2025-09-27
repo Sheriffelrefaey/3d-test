@@ -22,7 +22,7 @@ export default function AnnotationMarker({ annotation, onClick }: AnnotationMark
   };
 
   return (
-    <group position={new Vector3(annotation.position.x, annotation.position.y, annotation.position.z)}>
+    <group position={new Vector3(annotation.position_x, annotation.position_y, annotation.position_z)}>
       <mesh
         ref={meshRef}
         onClick={handleClick}
