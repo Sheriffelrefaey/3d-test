@@ -17,6 +17,7 @@ import { getGLTFLoader } from '@/lib/three/loaders';
 
 interface ModelEditorProps {
   modelUrl: string;
+  modelId: string;
   annotations: Annotation[];
   onAnnotationsChange: (annotations: Annotation[]) => void;
   onSave: (annotations: Annotation[]) => void;
@@ -230,6 +231,7 @@ function Scene({
 // Main Editor Component
 export default function ModelEditor({
   modelUrl,
+  modelId,
   annotations,
   onAnnotationsChange,
   onSave: _onSave
@@ -253,7 +255,7 @@ export default function ModelEditor({
         // Create a new annotation
         const newAnnotation: Annotation = {
           id: Date.now().toString(),
-          model_id: '',
+          model_id: modelId,
           object_name: object.name || 'Unnamed Object',
           title: '',
           description: '',
@@ -269,7 +271,7 @@ export default function ModelEditor({
       setShowPanel(false);
       setSelectedAnnotation(null);
     }
-  }, [annotations]);
+  }, [annotations, modelId]);
 
   const handleAnnotationUpdate = useCallback((updatedAnnotation: Annotation) => {
     const existingIndex = annotations.findIndex(a =>

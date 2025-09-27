@@ -62,36 +62,56 @@ export default function EditModelPage({ params }: EditPageProps) {
 
   const handleSaveAnnotations = async (updatedAnnotations: Annotation[]) => {
     setSaving(true);
+    console.log('Saving annotations:', updatedAnnotations);
+
     try {
-      // Delete existing annotations
+      // First, delete ALL existing annotations for this model
       const { error: deleteError } = await supabase
         .from('annotations')
         .delete()
-        .eq('model_id', resolvedParams.id);
+        .eq('model_id', resolvedParams.id)
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // This ensures we delete all records
 
-      if (deleteError) throw deleteError;
+      if (deleteError) {
+        console.error('Delete error:', deleteError);
+        throw deleteError;
+      }
 
-      // Insert new annotations
+      // Insert new annotations if any exist
       if (updatedAnnotations.length > 0) {
-        const annotationsToInsert = updatedAnnotations.map(ann => ({
-          model_id: resolvedParams.id,
-          object_name: ann.object_name,
-          title: ann.title,
-          description: ann.description,
-          position_x: ann.position_x,
-          position_y: ann.position_y,
-          position_z: ann.position_z,
-        }));
+        // Filter out annotations without titles (they're not complete)
+        const validAnnotations = updatedAnnotations.filter(ann => ann.title && ann.title.trim() !== '');
 
-        const { error: insertError } = await supabase
-          .from('annotations')
-          .insert(annotationsToInsert);
+        if (validAnnotations.length > 0) {
+          const annotationsToInsert = validAnnotations.map(ann => ({
+            model_id: resolvedParams.id,
+            object_name: ann.object_name || 'Unknown',
+            title: ann.title,
+            description: ann.description || '',
+            position_x: ann.position_x || 0,
+            position_y: ann.position_y || 0,
+            position_z: ann.position_z || 0,
+          }));
 
-        if (insertError) throw insertError;
+          console.log('Inserting annotations:', annotationsToInsert);
+
+          const { data: insertData, error: insertError } = await supabase
+            .from('annotations')
+            .insert(annotationsToInsert)
+            .select();
+
+          if (insertError) {
+            console.error('Insert error:', insertError);
+            throw insertError;
+          }
+
+          console.log('Inserted annotations:', insertData);
+        }
       }
 
       // Success feedback
       console.log('Annotations saved successfully!');
+      alert('Annotations saved successfully!');
 
       // Fetch updated annotations to sync IDs
       await fetchModelData();
@@ -100,6 +120,9 @@ export default function EditModelPage({ params }: EditPageProps) {
       // Show more detailed error information
       if (error instanceof Error) {
         console.error('Error message:', error.message);
+        alert(`Failed to save annotations: ${error.message}`);
+      } else {
+        alert('Failed to save annotations. Please check the console for details.');
       }
     } finally {
       setSaving(false);
@@ -161,6 +184,7 @@ export default function EditModelPage({ params }: EditPageProps) {
       <div className="flex-1 relative">
         <ModelEditor
           modelUrl={model.file_url}
+          modelId={resolvedParams.id}
           annotations={annotations}
           onAnnotationsChange={setAnnotations}
           onSave={handleSaveAnnotations}
