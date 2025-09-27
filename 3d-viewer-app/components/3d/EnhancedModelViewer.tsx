@@ -145,13 +145,122 @@ function ViewerScene({
     };
   }, [gltf, camera, resetViewRef]);
 
-  // Apply materials to meshes
+  // Apply materials to meshes with texture support
   useEffect(() => {
     meshes.forEach(mesh => {
       const material = materials.get(mesh.name);
       if (material) {
-        const threeParams = materialToThreeJS(material);
-        mesh.material = new THREE.MeshPhysicalMaterial(threeParams);
+        // Check if mesh has UV coordinates - required for textures
+        const geometry = mesh.geometry;
+        const hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+
+        // Create base material parameters
+        // If there's a texture, set color to white so texture shows properly
+        const hasTexture = material.texture_url && hasUVs;
+        const baseParams = {
+          color: hasTexture
+            ? new THREE.Color(1, 1, 1) // White color to show texture without tinting
+            : new THREE.Color(material.color.r / 255, material.color.g / 255, material.color.b / 255),
+          metalness: material.properties.metalness,
+          roughness: material.properties.roughness,
+          opacity: material.properties.opacity,
+          transparent: material.properties.opacity < 1,
+          emissive: new THREE.Color(
+            material.properties.emissive.r / 255,
+            material.properties.emissive.g / 255,
+            material.properties.emissive.b / 255
+          ),
+          emissiveIntensity: material.properties.emissiveIntensity,
+        };
+
+        // Add optional properties
+        if (material.properties.clearcoat !== undefined) {
+          baseParams.clearcoat = material.properties.clearcoat;
+        }
+        if (material.properties.clearcoatRoughness !== undefined) {
+          baseParams.clearcoatRoughness = material.properties.clearcoatRoughness;
+        }
+        if (material.properties.ior !== undefined) {
+          baseParams.ior = material.properties.ior;
+        }
+        if (material.properties.transmission !== undefined) {
+          baseParams.transmission = material.properties.transmission;
+        }
+        if (material.properties.thickness !== undefined) {
+          baseParams.thickness = material.properties.thickness;
+        }
+        if (material.properties.reflectivity !== undefined) {
+          baseParams.reflectivity = material.properties.reflectivity;
+        }
+
+        // Create the material
+        const newMaterial = new THREE.MeshPhysicalMaterial(baseParams);
+
+        // Apply the material immediately
+        mesh.material = newMaterial;
+
+        // If there's a texture URL and the mesh has UVs, load and apply texture
+        if (material.texture_url && hasUVs) {
+          console.log(`Loading texture for "${mesh.name}" from: ${material.texture_url}`);
+
+          const textureLoader = new THREE.TextureLoader();
+          textureLoader.load(
+            material.texture_url,
+            (texture) => {
+              console.log(`Texture loaded successfully for "${mesh.name}"`);
+
+              // Apply texture settings if they exist
+              if (material.texture_settings) {
+                const settings = material.texture_settings;
+
+                if (settings.repeat) {
+                  texture.repeat.set(settings.repeat.x || 1, settings.repeat.y || 1);
+                }
+                if (settings.offset) {
+                  texture.offset.set(settings.offset.x || 0, settings.offset.y || 0);
+                }
+                if (settings.rotation !== undefined) {
+                  texture.rotation = settings.rotation;
+                }
+
+                texture.center.set(0.5, 0.5);
+                texture.wrapS = settings.wrapS === 'repeat' ? THREE.RepeatWrapping :
+                              settings.wrapS === 'mirror' ? THREE.MirroredRepeatWrapping :
+                              THREE.ClampToEdgeWrapping;
+                texture.wrapT = settings.wrapT === 'repeat' ? THREE.RepeatWrapping :
+                              settings.wrapT === 'mirror' ? THREE.MirroredRepeatWrapping :
+                              THREE.ClampToEdgeWrapping;
+              } else {
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+              }
+
+              texture.colorSpace = THREE.SRGBColorSpace;
+
+              // Apply the texture to the existing material on the mesh
+              if (mesh.material instanceof THREE.MeshPhysicalMaterial) {
+                mesh.material.map = texture;
+                mesh.material.needsUpdate = true;
+
+                // Ensure the material color doesn't tint the texture
+                mesh.material.color = new THREE.Color(1, 1, 1);
+
+                console.log(`Texture applied to "${mesh.name}"`, {
+                  hasMap: !!mesh.material.map,
+                  textureUrl: material.texture_url,
+                  material: mesh.material
+                });
+              }
+            },
+            undefined,
+            (error) => {
+              console.error(`Failed to load texture for "${mesh.name}":`, error);
+              console.error('Texture URL:', material.texture_url);
+            }
+          );
+        } else if (material.texture_url && !hasUVs) {
+          console.warn(`Mesh "${mesh.name}" doesn't have UV coordinates. Texture cannot be applied.`);
+        }
       }
     });
   }, [materials, meshes]);

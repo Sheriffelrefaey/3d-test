@@ -217,7 +217,7 @@ export function applyMaterialPreset(
 
 // Convert material properties to Three.js material parameters
 export function materialToThreeJS(material: ObjectMaterial): any {
-  const { color, properties } = material;
+  const { color, properties, texture_url, texture_settings } = material;
 
   const params: any = {
     color: `rgb(${color.r}, ${color.g}, ${color.b})`,
@@ -228,6 +228,12 @@ export function materialToThreeJS(material: ObjectMaterial): any {
     emissive: `rgb(${properties.emissive.r}, ${properties.emissive.g}, ${properties.emissive.b})`,
     emissiveIntensity: properties.emissiveIntensity,
   };
+
+  // Add texture information if it exists
+  if (texture_url) {
+    params.map = texture_url;
+    params.textureSettings = texture_settings;
+  }
 
   // Add optional properties if they exist
   if (properties.clearcoat !== undefined) {

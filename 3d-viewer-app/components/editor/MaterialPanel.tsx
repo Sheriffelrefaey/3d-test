@@ -251,6 +251,16 @@ export default function MaterialPanel({
             {/* Texture Upload */}
             <div className="space-y-1">
               <label className="text-sm font-medium text-gray-300">Texture</label>
+
+              {/* UV Warning - shown if object doesn't have UV coordinates */}
+              {material && !material.hasUVs && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2 mb-2">
+                  <p className="text-xs text-yellow-400">
+                    ⚠️ This object doesn't have UV coordinates. Textures may not display correctly.
+                  </p>
+                </div>
+              )}
+
               {texturePreview ? (
                 <div className="relative group">
                   <img
@@ -318,6 +328,184 @@ export default function MaterialPanel({
                 className="hidden"
               />
             </div>
+
+            {/* Texture Settings - show when texture is loaded */}
+            {texturePreview && material.texture_settings && (
+              <div className="space-y-3 mt-4 pt-4 border-t border-white/10">
+                <h4 className="text-sm font-medium text-gray-300">Texture Settings</h4>
+
+                {/* Texture Rotation */}
+                <PropertySlider
+                  label="Rotation"
+                  value={material.texture_settings.rotation || 0}
+                  onChange={(value) => {
+                    onChange({
+                      ...material,
+                      texture_settings: {
+                        ...material.texture_settings!,
+                        rotation: value
+                      }
+                    });
+                  }}
+                  min={0}
+                  max={Math.PI * 2}
+                  step={0.01}
+                  description={`${((material.texture_settings.rotation || 0) * 180 / Math.PI).toFixed(1)}°`}
+                />
+
+                {/* Texture Repeat X */}
+                <PropertySlider
+                  label="Repeat X"
+                  value={material.texture_settings.repeat?.x || 1}
+                  onChange={(value) => {
+                    onChange({
+                      ...material,
+                      texture_settings: {
+                        ...material.texture_settings!,
+                        repeat: {
+                          ...material.texture_settings!.repeat!,
+                          x: value
+                        }
+                      }
+                    });
+                  }}
+                  min={0.1}
+                  max={10}
+                  step={0.1}
+                  description="Horizontal tiling"
+                />
+
+                {/* Texture Repeat Y */}
+                <PropertySlider
+                  label="Repeat Y"
+                  value={material.texture_settings.repeat?.y || 1}
+                  onChange={(value) => {
+                    onChange({
+                      ...material,
+                      texture_settings: {
+                        ...material.texture_settings!,
+                        repeat: {
+                          ...material.texture_settings!.repeat!,
+                          y: value
+                        }
+                      }
+                    });
+                  }}
+                  min={0.1}
+                  max={10}
+                  step={0.1}
+                  description="Vertical tiling"
+                />
+
+                {/* Texture Offset X */}
+                <PropertySlider
+                  label="Offset X"
+                  value={material.texture_settings.offset?.x || 0}
+                  onChange={(value) => {
+                    onChange({
+                      ...material,
+                      texture_settings: {
+                        ...material.texture_settings!,
+                        offset: {
+                          ...material.texture_settings!.offset!,
+                          x: value
+                        }
+                      }
+                    });
+                  }}
+                  min={-1}
+                  max={1}
+                  step={0.01}
+                  description="Horizontal position"
+                />
+
+                {/* Texture Offset Y */}
+                <PropertySlider
+                  label="Offset Y"
+                  value={material.texture_settings.offset?.y || 0}
+                  onChange={(value) => {
+                    onChange({
+                      ...material,
+                      texture_settings: {
+                        ...material.texture_settings!,
+                        offset: {
+                          ...material.texture_settings!.offset!,
+                          y: value
+                        }
+                      }
+                    });
+                  }}
+                  min={-1}
+                  max={1}
+                  step={0.01}
+                  description="Vertical position"
+                />
+
+                {/* Wrap Mode */}
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-gray-300">Wrap Mode</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        onChange({
+                          ...material,
+                          texture_settings: {
+                            ...material.texture_settings!,
+                            wrapS: 'repeat',
+                            wrapT: 'repeat'
+                          }
+                        });
+                      }}
+                      className={`flex-1 py-1 px-2 text-xs rounded ${
+                        material.texture_settings.wrapS === 'repeat'
+                          ? 'bg-blue-500/20 border border-blue-500/50 text-blue-400'
+                          : 'glass-button text-gray-400'
+                      }`}
+                    >
+                      Repeat
+                    </button>
+                    <button
+                      onClick={() => {
+                        onChange({
+                          ...material,
+                          texture_settings: {
+                            ...material.texture_settings!,
+                            wrapS: 'mirror',
+                            wrapT: 'mirror'
+                          }
+                        });
+                      }}
+                      className={`flex-1 py-1 px-2 text-xs rounded ${
+                        material.texture_settings.wrapS === 'mirror'
+                          ? 'bg-blue-500/20 border border-blue-500/50 text-blue-400'
+                          : 'glass-button text-gray-400'
+                      }`}
+                    >
+                      Mirror
+                    </button>
+                    <button
+                      onClick={() => {
+                        onChange({
+                          ...material,
+                          texture_settings: {
+                            ...material.texture_settings!,
+                            wrapS: 'clamp',
+                            wrapT: 'clamp'
+                          }
+                        });
+                      }}
+                      className={`flex-1 py-1 px-2 text-xs rounded ${
+                        material.texture_settings.wrapS === 'clamp'
+                          ? 'bg-blue-500/20 border border-blue-500/50 text-blue-400'
+                          : 'glass-button text-gray-400'
+                      }`}
+                    >
+                      Clamp
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </Collapsible.Content>
       </Collapsible.Root>
