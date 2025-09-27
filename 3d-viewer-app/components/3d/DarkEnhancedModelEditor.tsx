@@ -49,6 +49,7 @@ import { HUDAnnotationCard } from './HUDAnnotation';
 import { useEditorStore } from '@/lib/store/editorStore';
 import { materialToThreeJS } from '@/lib/materials/presets';
 import { getGLTFLoader } from '@/lib/three/loaders';
+import { autoGenerateUVs } from '@/lib/three/uvGenerator';
 
 // Types
 import type {
@@ -327,7 +328,14 @@ function EnhancedScene({
       if (material) {
         // Check if mesh has UV coordinates - required for textures
         const geometry = mesh.geometry;
-        const hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+        let hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+
+        // If no UVs exist and we need to apply a texture, generate them
+        if (!hasUVs && material.texture_url) {
+          console.log(`No UV coordinates found for "${mesh.name}". Generating UVs...`);
+          autoGenerateUVs(geometry, mesh.name);
+          hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+        }
 
         console.log(`Applying material to mesh "${mesh.name}":`, {
           hasTexture: !!material.texture_url,
@@ -449,9 +457,6 @@ function EnhancedScene({
               console.error('Texture URL:', material.texture_url);
             }
           );
-        } else if (material.texture_url && !hasUVs) {
-          console.warn(`Mesh "${mesh.name}" doesn't have UV coordinates. Texture cannot be applied.`);
-        }
       } else {
         // No material override, use original
         mesh.material = mesh.userData.originalMaterial || mesh.material;

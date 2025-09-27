@@ -6,6 +6,7 @@ import { OrbitControls, Environment, Grid, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { getGLTFLoader } from '@/lib/three/loaders';
 import { materialToThreeJS } from '@/lib/materials/presets';
+import { autoGenerateUVs } from '@/lib/three/uvGenerator';
 import type { Annotation } from '@/types';
 import {
   loadMaterials,
@@ -152,7 +153,14 @@ function ViewerScene({
       if (material) {
         // Check if mesh has UV coordinates - required for textures
         const geometry = mesh.geometry;
-        const hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+        let hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+
+        // If no UVs exist and we need to apply a texture, generate them
+        if (!hasUVs && material.texture_url) {
+          console.log(`No UV coordinates found for "${mesh.name}". Generating UVs...`);
+          autoGenerateUVs(geometry, mesh.name);
+          hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+        }
 
         // Create base material parameters
         // If there's a texture, set color to white so texture shows properly
@@ -258,9 +266,6 @@ function ViewerScene({
               console.error('Texture URL:', material.texture_url);
             }
           );
-        } else if (material.texture_url && !hasUVs) {
-          console.warn(`Mesh "${mesh.name}" doesn't have UV coordinates. Texture cannot be applied.`);
-        }
       }
     });
   }, [materials, meshes]);
