@@ -38,10 +38,9 @@ export default function ModelViewer({ modelUrl, children }: ModelViewerProps) {
             </mesh>
           }
         >
-          {/* Add white fog for better depth perception */}
-          <fog attach="fog" args={['#f5f5f5', 15, 60]} />
+          {/* Removed fog - was making models appear white */}
 
-          <PerspectiveCamera makeDefault position={[15, 10, 15]} fov={50} />
+          <PerspectiveCamera makeDefault position={[5, 4, 5]} fov={50} /> {/* Closer initial position */}
           <OrbitControls
             enablePan={true}
             enableZoom={true}
@@ -49,16 +48,16 @@ export default function ModelViewer({ modelUrl, children }: ModelViewerProps) {
             minDistance={0.5}
             maxDistance={100}
             maxPolarAngle={Math.PI * 0.85}
-            target={[0, 2, 0]}
+            target={[0, 0.5, 0]} {/* Lower target for better centering */}
           />
 
           {/* Enhanced lighting setup for better visibility */}
-          <ambientLight intensity={3.5} />
+          <ambientLight intensity={1.2} />
 
           {/* Main key light */}
           <directionalLight
             position={[10, 10, 5]}
-            intensity={5}
+            intensity={3}
             castShadow
             shadow-mapSize-width={2048}
             shadow-mapSize-height={2048}
@@ -68,28 +67,19 @@ export default function ModelViewer({ modelUrl, children }: ModelViewerProps) {
           {/* Fill light from opposite side */}
           <directionalLight
             position={[-5, 5, -5]}
-            intensity={3}
-            color="#ffffff"
-          />
-
-          {/* Rim light for edge highlighting */}
-          <directionalLight
-            position={[0, 5, -10]}
-            intensity={2.5}
+            intensity={2}
             color="#ffffff"
           />
 
           {/* Bottom fill light to illuminate underside */}
           <directionalLight
             position={[0, -5, 0]}
-            intensity={2}
+            intensity={1.5}
             color="#ffffff"
           />
 
-          {/* Point lights for additional illumination */}
-          <pointLight position={[5, 5, 5]} intensity={2} color="#ffffff" />
-          <pointLight position={[-5, 5, -5]} intensity={2} color="#ffffff" />
-          <pointLight position={[0, 10, 0]} intensity={3} color="#ffffff" />
+          {/* Point light for additional illumination */}
+          <pointLight position={[0, 10, 0]} intensity={2} color="#ffffff" />
 
           <group ref={groupRef}>
             {modelUrl ? (

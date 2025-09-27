@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { X, Save, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import type { Annotation } from '@/types';
 
 interface AnnotationPanelProps {
@@ -34,13 +36,18 @@ export default function AnnotationPanel({
     };
     onUpdate(updatedAnnotation);
     setIsDirty(false);
+    toast.success('Annotation updated successfully', {
+      position: 'bottom-left',
+      duration: 3000,
+    });
   };
 
   const handleDelete = () => {
-    // eslint-disable-next-line no-alert
-    if (window.confirm('Are you sure you want to delete this annotation?')) {
-      onDelete(annotation);
-    }
+    onDelete(annotation);
+    toast.success('Annotation deleted', {
+      position: 'bottom-left',
+      duration: 3000,
+    });
   };
 
   const handleChange = () => {
@@ -48,42 +55,41 @@ export default function AnnotationPanel({
   };
 
   return (
-    <div className="absolute top-1/2 right-4 transform -translate-y-1/2 w-96 bg-white rounded-lg shadow-2xl border border-gray-200 z-50">
+    <div className="space-y-3 text-white">
       {/* Header */}
-      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 rounded-t-lg">
+      <div className="glass-panel-light p-3 rounded-lg">
         <div className="flex justify-between items-center">
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 className="text-sm font-semibold text-white">
             Edit Annotation
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="p-1 hover:bg-white/10 rounded transition-colors"
+            title="Close"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X size={16} className="text-gray-400" />
           </button>
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-4">
+      <div className="glass-panel-light rounded-lg p-3 space-y-3">
         {/* Object Name (read-only) */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-gray-400 mb-1">
             Object Name
           </label>
           <input
             type="text"
             value={annotation.object_name}
             readOnly
-            className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-gray-600 cursor-not-allowed"
+            className="w-full px-2 py-1.5 bg-black/30 border border-white/10 rounded text-sm text-gray-300 cursor-not-allowed"
           />
         </div>
 
         {/* Title */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-gray-400 mb-1">
             Title *
           </label>
           <input
@@ -93,14 +99,14 @@ export default function AnnotationPanel({
               setTitle(e.target.value);
               handleChange();
             }}
-            placeholder="Enter annotation title..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Enter annotation title"
+            className="w-full px-2 py-1.5 bg-black/30 border border-white/10 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 transition-colors"
           />
         </div>
 
         {/* Description */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-xs font-medium text-gray-400 mb-1">
             Description
           </label>
           <textarea
@@ -109,44 +115,74 @@ export default function AnnotationPanel({
               setDescription(e.target.value);
               handleChange();
             }}
-            placeholder="Enter detailed description..."
-            rows={4}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            placeholder="Enter annotation description"
+            rows={3}
+            className="w-full px-2 py-1.5 bg-black/30 border border-white/10 rounded text-sm text-white placeholder-gray-500 resize-none focus:outline-none focus:border-blue-500/50 transition-colors"
           />
         </div>
 
-        {/* Position Info */}
-        <div className="bg-gray-50 p-3 rounded-md">
-          <p className="text-xs font-medium text-gray-600 mb-1">Position (X, Y, Z)</p>
-          <p className="text-sm font-mono text-gray-800">
-            {annotation.position_x.toFixed(2)}, {annotation.position_y.toFixed(2)}, {annotation.position_z.toFixed(2)}
-          </p>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex justify-between pt-2">
-          <button
-            onClick={handleDelete}
-            className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-          >
-            Delete
-          </button>
-          <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!title.trim() || !isDirty}
-              className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Apply
-            </button>
+        {/* Position (read-only) */}
+        <div>
+          <label className="block text-xs font-medium text-gray-400 mb-1">
+            Position
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-xs text-gray-500">X</label>
+              <input
+                type="text"
+                value={annotation.position_x.toFixed(2)}
+                readOnly
+                className="w-full px-2 py-1 bg-black/30 border border-white/10 rounded text-xs text-gray-300 cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500">Y</label>
+              <input
+                type="text"
+                value={annotation.position_y.toFixed(2)}
+                readOnly
+                className="w-full px-2 py-1 bg-black/30 border border-white/10 rounded text-xs text-gray-300 cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500">Z</label>
+              <input
+                type="text"
+                value={annotation.position_z.toFixed(2)}
+                readOnly
+                className="w-full px-2 py-1 bg-black/30 border border-white/10 rounded text-xs text-gray-300 cursor-not-allowed"
+              />
+            </div>
           </div>
         </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-2">
+        <button
+          onClick={handleSave}
+          disabled={!isDirty || !title.trim()}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-all ${
+            isDirty && title.trim()
+              ? 'glass-button bg-blue-500/20 hover:bg-blue-500/30 text-blue-400'
+              : 'glass bg-white/5 text-gray-500 cursor-not-allowed'
+          }`}
+        >
+          <Save size={14} />
+          Save Changes
+        </button>
+
+        <button
+          onClick={handleDelete}
+          className="px-3 py-2 glass-button rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all text-sm"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+
+      <div className="text-xs text-gray-500 text-center">
+        * Click on any object in the 3D view to set annotation position
       </div>
     </div>
   );

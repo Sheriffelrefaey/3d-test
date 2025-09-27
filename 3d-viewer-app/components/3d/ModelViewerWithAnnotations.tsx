@@ -1,7 +1,7 @@
 'use client';
 
-import React, { Suspense, useState, useEffect } from 'react';
-import { Canvas, useThree, useLoader } from '@react-three/fiber';
+import React, { Suspense, useState, useEffect, useRef } from 'react';
+import { Canvas, useThree, useLoader, useFrame } from '@react-three/fiber';
 import {
   OrbitControls,
   Environment,
@@ -71,15 +71,44 @@ function AnnotationMarker({ annotation, onClick }: { annotation: Annotation; onC
 function ModelWithAnnotations({
   modelUrl,
   annotations,
-  onAnnotationClick
+  onAnnotationClick,
+  onObjectClick,
+  targetPosition,
+  clickedMesh
 }: {
   modelUrl: string;
   annotations: Annotation[];
   onAnnotationClick: (annotation: Annotation) => void;
+  onObjectClick: (mesh: THREE.Mesh, point: THREE.Vector3) => void;
+  targetPosition: THREE.Vector3 | null;
+  clickedMesh: THREE.Mesh | null;
 }) {
   const gltf = useLoader(getGLTFLoader, modelUrl);
   const { camera } = useThree();
-  const [_meshes, setMeshes] = useState<THREE.Mesh[]>([]);
+  const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
+  const [hoveredMesh, setHoveredMesh] = useState<THREE.Mesh | null>(null);
+  const controlsRef = useRef<any>();
+  const [modelScale, setModelScale] = useState(1);
+
+  // Smooth camera animation to target position
+  useFrame(() => {
+    if (targetPosition && controlsRef.current) {
+      // Smoothly move camera target to the clicked point
+      controlsRef.current.target.lerp(targetPosition, 0.1);
+      controlsRef.current.update();
+
+      // Calculate distance based on object size for better framing
+      const zoomDistance = modelScale * 2; // Closer zoom based on model scale
+
+      // Position camera to look at the target from a nice angle
+      const idealCameraPos = targetPosition.clone();
+      idealCameraPos.x += zoomDistance;
+      idealCameraPos.y += zoomDistance * 0.7;
+      idealCameraPos.z += zoomDistance;
+
+      camera.position.lerp(idealCameraPos, 0.05);
+    }
+  });
 
   useEffect(() => {
     // Extract meshes and auto-fit model
@@ -87,15 +116,14 @@ function ModelWithAnnotations({
 
     gltf.scene.traverse((child) => {
       if (child instanceof THREE.Mesh) {
+        // Give each mesh a name if it doesn't have one
+        if (!child.name) {
+          child.name = `Object_${extractedMeshes.length + 1}`;
+        }
         extractedMeshes.push(child);
 
-        // Highlight objects that have annotations
-        const hasAnnotation = annotations.some(a => a.object_name === child.name);
-        if (hasAnnotation && child.material) {
-          const material = child.material as THREE.MeshStandardMaterial;
-          material.emissive = new THREE.Color(0x0066ff);
-          material.emissiveIntensity = 0.1;
-        }
+        // Store original material
+        child.userData.originalMaterial = child.material;
       }
     });
 
@@ -105,24 +133,125 @@ function ModelWithAnnotations({
     const box = new THREE.Box3().setFromObject(gltf.scene);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const scale = 10 / maxDim; // Increased scale for better visibility
 
-    // Center the model on X and Z, but place it on the grid (Y=0)
+    // Calculate optimal scale to fit model nicely in view
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const scale = 5 / maxDim; // Reduced scale for closer view
+
+    // Center the model at origin
     gltf.scene.position.x = -center.x * scale;
     gltf.scene.position.z = -center.z * scale;
     gltf.scene.position.y = -box.min.y * scale; // Place bottom of model on grid
     gltf.scene.scale.setScalar(scale);
 
-    // Position camera for better initial view
-    const dist = Math.max(size.x, size.z) * scale;
-    camera.position.set(dist, dist * 0.7, dist);
-    camera.lookAt(0, size.y * scale / 2, 0); // Look at center height of model
+    // Store scale for camera calculations
+    setModelScale(scale);
+
+    // Calculate scaled dimensions
+    const scaledHeight = size.y * scale;
+    const scaledWidth = size.x * scale;
+    const scaledDepth = size.z * scale;
+
+    // Position camera to frame the model properly - closer view
+    const distance = Math.max(scaledWidth, scaledDepth, scaledHeight) * 1.2; // Reduced multiplier
+    const cameraHeight = scaledHeight * 0.5 + 2; // Simpler height calculation
+
+    camera.position.set(distance, cameraHeight, distance);
+    camera.lookAt(0, scaledHeight * 0.3, 0); // Look slightly lower on the model
+    camera.updateProjectionMatrix();
   }, [gltf, camera, annotations]);
+
+  // Handle mesh click
+  const handleMeshClick = (event: any, mesh: THREE.Mesh) => {
+    event.stopPropagation();
+    const point = event.point;
+    onObjectClick(mesh, point);
+  };
+
+  // Handle mesh hover
+  const handleMeshHover = (mesh: THREE.Mesh | null) => {
+    // Reset previous hovered mesh if it's not the clicked mesh
+    if (hoveredMesh && hoveredMesh !== mesh && hoveredMesh !== clickedMesh) {
+      hoveredMesh.material = hoveredMesh.userData.originalMaterial;
+    }
+
+    // Highlight new hovered mesh
+    if (mesh && mesh !== clickedMesh) {
+      const highlightMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffff00,
+        emissive: 0xffff00,
+        emissiveIntensity: 0.2
+      });
+      mesh.material = highlightMaterial;
+    }
+
+    setHoveredMesh(mesh);
+  };
+
+  // Get material for mesh based on state
+  const getMeshMaterial = (mesh: THREE.Mesh) => {
+    if (clickedMesh === mesh) {
+      // Clicked mesh - green highlight
+      return new THREE.MeshStandardMaterial({
+        color: 0x00ff00,
+        emissive: 0x00ff00,
+        emissiveIntensity: 0.3
+      });
+    } else if (hoveredMesh === mesh) {
+      // Hovered mesh - yellow highlight
+      return new THREE.MeshStandardMaterial({
+        color: 0xffff00,
+        emissive: 0xffff00,
+        emissiveIntensity: 0.2
+      });
+    } else {
+      // Default material
+      return mesh.userData.originalMaterial;
+    }
+  };
 
   return (
     <>
-      <primitive object={gltf.scene} />
+      {/* Render meshes with click handlers */}
+      {meshes.map((mesh, index) => (
+        <mesh
+          key={`${mesh.name}_${index}`}
+          geometry={mesh.geometry}
+          material={getMeshMaterial(mesh)}
+          position={mesh.position}
+          rotation={mesh.rotation}
+          scale={mesh.scale}
+          onClick={(e) => handleMeshClick(e, mesh)}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            handleMeshHover(mesh);
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+            if (mesh !== clickedMesh) {
+              handleMeshHover(null);
+            }
+            document.body.style.cursor = 'default';
+          }}
+        />
+      ))}
+
+      {/* Show annotation marker on clicked object */}
+      {clickedMesh && targetPosition && (
+        <mesh position={targetPosition}>
+          <sphereGeometry args={[0.2, 16, 16]} />
+          <meshStandardMaterial
+            color="#00ff00"
+            emissive="#00ff00"
+            emissiveIntensity={0.5}
+            transparent
+            opacity={0.8}
+          />
+        </mesh>
+      )}
+
+      {/* Annotation markers */}
       {annotations.map((annotation, idx) => (
         <AnnotationMarker
           key={annotation.id || idx}
@@ -130,6 +259,18 @@ function ModelWithAnnotations({
           onClick={() => onAnnotationClick(annotation)}
         />
       ))}
+
+      {/* OrbitControls with ref */}
+      <OrbitControls
+        ref={controlsRef}
+        enablePan={true}
+        enableZoom={true}
+        enableRotate={true}
+        minDistance={0.5}
+        maxDistance={100}
+        maxPolarAngle={Math.PI * 0.85}
+        makeDefault
+      />
     </>
   );
 }
@@ -140,20 +281,60 @@ export default function ModelViewerWithAnnotations({
   annotations
 }: ModelViewerWithAnnotationsProps) {
   const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
+  const [showAnnotationInfo, setShowAnnotationInfo] = useState(false);
+  const [targetPosition, setTargetPosition] = useState<THREE.Vector3 | null>(null);
+  const [clickedMesh, setClickedMesh] = useState<THREE.Mesh | null>(null);
 
   const handleAnnotationClick = (annotation: Annotation) => {
     setSelectedAnnotation(annotation);
+    setShowAnnotationInfo(true);
+    // Set camera target to annotation position
+    setTargetPosition(new THREE.Vector3(
+      annotation.position_x,
+      annotation.position_y,
+      annotation.position_z
+    ));
+  };
+
+  const handleObjectClick = (mesh: THREE.Mesh, point: THREE.Vector3) => {
+    // Set the clicked mesh and target position
+    setClickedMesh(mesh);
+    setTargetPosition(point.clone());
+
+    // Check if there's an annotation for this object
+    const annotation = annotations.find(a => a.object_name === mesh.name);
+    if (annotation) {
+      setSelectedAnnotation(annotation);
+      setShowAnnotationInfo(true);
+    } else {
+      // Show object info even without annotation
+      setSelectedAnnotation({
+        id: 'temp_' + Date.now(),
+        model_id: '',
+        object_name: mesh.name || 'Unnamed Object',
+        title: mesh.name || 'Unnamed Object',
+        description: 'Click location on ' + (mesh.name || 'object'),
+        position_x: point.x,
+        position_y: point.y,
+        position_z: point.z,
+        created_at: new Date().toISOString()
+      });
+      setShowAnnotationInfo(true);
+    }
   };
 
   const handleClosePanel = () => {
     setSelectedAnnotation(null);
+    setShowAnnotationInfo(false);
+    setClickedMesh(null);
+    setTargetPosition(null);
   };
 
   return (
     <div className="relative w-full h-full">
       <Canvas
         shadows
-        camera={{ position: [8, 8, 8], fov: 50 }}
+        camera={{ position: [5, 4, 5], fov: 50 }} // Closer initial position
         gl={{
           antialias: true,
           toneMapping: 2,
@@ -166,11 +347,10 @@ export default function ModelViewerWithAnnotations({
             <meshStandardMaterial color="#8B5CF6" wireframe />
           </mesh>
         }>
-          {/* Fog for depth */}
-          <fog attach="fog" args={['#f5f5f5', 15, 60]} />
+          {/* Removed fog - was making models appear white */}
 
           {/* Lighting */}
-          <ambientLight intensity={2} />
+          <ambientLight intensity={1.2} />
           <directionalLight
             position={[10, 10, 5]}
             intensity={3}
@@ -189,6 +369,9 @@ export default function ModelViewerWithAnnotations({
                 modelUrl={modelUrl}
                 annotations={annotations}
                 onAnnotationClick={handleAnnotationClick}
+                onObjectClick={handleObjectClick}
+                targetPosition={targetPosition}
+                clickedMesh={clickedMesh}
               />
             </Center>
           </Bounds>
@@ -207,16 +390,7 @@ export default function ModelViewerWithAnnotations({
             infiniteGrid={true}
           />
 
-          {/* Controls */}
-          <OrbitControls
-            enablePan={true}
-            enableZoom={true}
-            enableRotate={true}
-            minDistance={0.5}
-            maxDistance={100}
-            maxPolarAngle={Math.PI * 0.85}
-            target={[0, 2, 0]}
-          />
+          {/* Controls are now inside ModelWithAnnotations component */}
 
           {/* Environment */}
           <Environment preset="city" background={false} />
@@ -235,7 +409,7 @@ export default function ModelViewerWithAnnotations({
       </div>
 
       {/* Annotation Details Panel */}
-      {selectedAnnotation && (
+      {selectedAnnotation && showAnnotationInfo && (
         <div className="absolute top-1/2 right-4 transform -translate-y-1/2 w-80 bg-white rounded-lg shadow-2xl border border-gray-200 z-50">
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 px-4 py-3 rounded-t-lg">
             <div className="flex justify-between items-center">
@@ -298,7 +472,7 @@ export default function ModelViewerWithAnnotations({
               <li
                 key={ann.id || idx}
                 className="flex items-center gap-2 p-1 hover:bg-gray-100 rounded cursor-pointer"
-                onClick={() => setSelectedAnnotation(ann)}
+                onClick={() => handleAnnotationClick(ann)}
               >
                 <div className="w-2 h-2 bg-red-500 rounded-full flex-shrink-0" />
                 <span className="truncate">{ann.title || ann.object_name || 'Untitled'}</span>

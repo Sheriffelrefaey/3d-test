@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import toast, { Toaster } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { Plus, Eye, Edit, Trash2, Search, Grid, List, Upload as UploadIcon, Calendar, FileBox, Box, MessageSquare } from 'lucide-react';
 import UploadModal from '@/components/ui/UploadModal';
@@ -103,9 +104,9 @@ export default function AdminPage() {
   };
 
   const handleDelete = async (id: string) => {
-    // eslint-disable-next-line no-alert
-    const userConfirmed = window.confirm('Are you sure you want to delete this model?');
-    if (!userConfirmed) return;
+    // No confirmation, delete immediately with toast
+    const modelToDelete = models.find(m => m.id === id);
+    const modelName = modelToDelete?.name || 'Model';
 
     try {
       const response = await fetch(`/api/models?id=${id}`, {
@@ -120,12 +121,23 @@ export default function AdminPage() {
           totalModels: prev.totalModels - 1,
           storageUsed: Math.max(0, prev.storageUsed - 5) // Rough estimate
         }));
+        toast.success(`"${modelName}" has been deleted`, {
+          position: 'bottom-left',
+          duration: 3000,
+        });
       } else {
         console.error('Failed to delete model');
+        toast.error('Failed to delete model', {
+          position: 'bottom-left',
+          duration: 4000,
+        });
       }
     } catch (error) {
       console.error('Failed to delete model:', error);
-      console.error('An error occurred while deleting the model');
+      toast.error('An error occurred while deleting the model', {
+        position: 'bottom-left',
+        duration: 4000,
+      });
     }
   };
 
@@ -161,7 +173,8 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="min-h-screen relative">
+    <>
+      <div className="min-h-screen relative">
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-cyan-900/20" />
 
@@ -322,11 +335,12 @@ export default function AdminPage() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => router.push(`/viewer/${model.id}`)}
-                        className="flex-1 py-2 rounded-lg glass border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-1"
+                        onClick={() => window.open(`/viewer/${model.id}`, '_blank')}
+                        className="flex-1 py-2 rounded-lg bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/50 text-blue-400 hover:from-blue-500/30 hover:to-cyan-500/30 transition-all flex items-center justify-center gap-1 font-medium"
+                        title="Preview in new tab"
                       >
                         <Eye className="w-4 h-4" />
-                        View
+                        Preview
                       </button>
                       <button
                         onClick={() => router.push(`/admin/edit/${model.id}`)}
@@ -338,6 +352,7 @@ export default function AdminPage() {
                       <button
                         onClick={() => handleDelete(model.id)}
                         className="py-2 px-3 rounded-lg glass border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-all"
+                        title="Delete model"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -367,20 +382,24 @@ export default function AdminPage() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => router.push(`/viewer/${model.id}`)}
-                      className="p-2 rounded-lg glass border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-all"
+                      onClick={() => window.open(`/viewer/${model.id}`, '_blank')}
+                      className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/50 text-blue-400 hover:from-blue-500/30 hover:to-cyan-500/30 transition-all flex items-center gap-2 font-medium"
+                      title="Preview in new tab"
                     >
                       <Eye className="w-4 h-4" />
+                      Preview
                     </button>
                     <button
                       onClick={() => router.push(`/admin/edit/${model.id}`)}
-                      className="p-2 rounded-lg glass border border-purple-500/50 text-purple-400 hover:bg-purple-500/10 transition-all"
+                      className="px-4 py-2 rounded-lg glass border border-purple-500/50 text-purple-400 hover:bg-purple-500/10 transition-all flex items-center gap-2"
                     >
                       <Edit className="w-4 h-4" />
+                      Edit
                     </button>
                     <button
                       onClick={() => handleDelete(model.id)}
                       className="p-2 rounded-lg glass border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-all"
+                      title="Delete model"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -398,6 +417,33 @@ export default function AdminPage() {
         fetchModels(); // Refresh the list after upload
         fetchStatistics(); // Update statistics
       }} />
-    </div>
+      </div>
+
+      {/* Toast Notifications */}
+      <Toaster
+        toastOptions={{
+          className: '',
+          style: {
+            background: 'rgba(17, 24, 39, 0.95)',
+            color: '#fff',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+    </>
   );
 }

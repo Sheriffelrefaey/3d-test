@@ -7,7 +7,7 @@ import type { Annotation } from '@/types';
 import { Maximize2, Home, Settings, X, Eye, EyeOff, RotateCw, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
-const ModelViewerWithAnnotations = dynamic(() => import('@/components/3d/ModelViewerWithAnnotations'), {
+const DarkEnhancedModelEditor = dynamic(() => import('@/components/3d/DarkEnhancedModelEditor'), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-full">
@@ -231,18 +231,17 @@ export default function ViewerPage({ params }: ViewerPageProps) {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* 3D Viewer */}
+        {/* 3D Viewer - Using Editor in Read-Only Mode */}
         <div className="flex-1 relative">
-          <ModelViewerWithAnnotations
-            modelUrl={model.file_url}
-            annotations={showAnnotations ? annotations : []}
-          />
-
-          {/* Controls overlay */}
-          <div className="absolute bottom-4 left-4 glass rounded-lg p-3 text-xs text-gray-400">
-            <div>🖱️ Left Click: Rotate</div>
-            <div>🖱️ Right Click: Pan</div>
-            <div>⚲ Scroll: Zoom</div>
+          <div className="absolute inset-0" style={{ pointerEvents: 'auto' }}>
+            <DarkEnhancedModelEditor
+              modelUrl={model.file_url}
+              modelId={model.id}
+              annotations={showAnnotations ? annotations : []}
+              onAnnotationsChange={() => {}} // Read-only - no changes
+              onSave={() => {}} // Read-only - no save
+              readOnly={true} // Add this prop to disable editing
+            />
           </div>
         </div>
 

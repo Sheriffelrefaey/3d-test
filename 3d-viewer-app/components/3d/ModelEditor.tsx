@@ -1,19 +1,21 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Canvas, useThree, useLoader } from '@react-three/fiber';
+import { Canvas, useThree, useLoader, useFrame } from '@react-three/fiber';
 import {
   OrbitControls,
   Environment,
   Grid,
   GizmoHelper,
   GizmoViewport,
-  Html
+  Line
 } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Annotation } from '@/types';
 import AnnotationPanel from '@/components/ui/AnnotationPanel';
 import { getGLTFLoader } from '@/lib/three/loaders';
+import { HUDAnnotationCard, ObjectGlowEffect, ConnectionLine } from './HUDAnnotation';
+import { createPortal } from 'react-dom';
 
 interface ModelEditorProps {
   modelUrl: string;
@@ -29,10 +31,11 @@ interface ClickableObjectProps {
   isSelected: boolean;
 }
 
-// Component for making objects clickable
+// Component for making objects clickable with HUD glow effect
 function ClickableObject({ object, onSelect, isSelected }: ClickableObjectProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
+  const glowRef = useRef<THREE.Mesh>(null);
 
   useEffect(() => {
     if (object instanceof THREE.Mesh && meshRef.current) {
@@ -44,43 +47,131 @@ function ClickableObject({ object, onSelect, isSelected }: ClickableObjectProps)
     }
   }, [object]);
 
+  // Pulsing glow animation
+  useFrame(({ clock }) => {
+    if (glowRef.current && isSelected) {
+      const pulse = Math.sin(clock.getElapsedTime() * 2) * 0.5 + 0.5;
+      glowRef.current.material.emissiveIntensity = 0.3 + pulse * 0.3;
+      glowRef.current.material.opacity = 0.3 + pulse * 0.2;
+    }
+  });
+
   const handleClick = (event: { stopPropagation: () => void; point: THREE.Vector3 }) => {
     event.stopPropagation();
     onSelect(object, event.point);
   };
-
-  // Create highlight material
-  const highlightMaterial = new THREE.MeshStandardMaterial({
-    color: isSelected ? 0x00ff00 : (hovered ? 0xffff00 : 0xffffff),
-    emissive: isSelected ? 0x00ff00 : (hovered ? 0xffff00 : 0x000000),
-    emissiveIntensity: isSelected ? 0.3 : (hovered ? 0.1 : 0),
-  });
 
   if (!(object instanceof THREE.Mesh)) {
     return null;
   }
 
   return (
-    <mesh
-      ref={meshRef}
-      onClick={handleClick}
-      onPointerOver={(e) => {
-        e.stopPropagation();
-        setHovered(true);
-        document.body.style.cursor = 'pointer';
-      }}
-      onPointerOut={(e) => {
-        e.stopPropagation();
-        setHovered(false);
-        document.body.style.cursor = 'default';
-      }}
-      geometry={object.geometry}
-      material={isSelected || hovered ? highlightMaterial : object.material}
-      position={object.position}
-      rotation={object.rotation}
-      scale={object.scale}
-      name={object.name}
-    />
+    <>
+      <mesh
+        ref={meshRef}
+        onClick={handleClick}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          setHovered(true);
+          document.body.style.cursor = 'pointer';
+        }}
+        onPointerOut={(e) => {
+          e.stopPropagation();
+          setHovered(false);
+          document.body.style.cursor = 'default';
+        }}
+        geometry={object.geometry}
+        material={object.material}
+        position={object.position}
+        rotation={object.rotation}
+        scale={object.scale}
+        name={object.name}
+      />
+      {/* Glow overlay for selected objects */}
+      {isSelected && (
+        <mesh
+          ref={glowRef}
+          geometry={object.geometry}
+          position={object.position}
+          rotation={object.rotation}
+          scale={object.scale}
+        >
+          <meshStandardMaterial
+            color="#3b82f6"
+            emissive="#3b82f6"
+            emissiveIntensity={0.5}
+            transparent
+            opacity={0.4}
+            side={THREE.FrontSide}
+          />
+        </mesh>
+      )}
+      {/* Hover highlight */}
+      {hovered && !isSelected && (
+        <mesh
+          geometry={object.geometry}
+          position={object.position}
+          rotation={object.rotation}
+          scale={object.scale}
+        >
+          <meshStandardMaterial
+            color="#60a5fa"
+            emissive="#60a5fa"
+            emissiveIntensity={0.2}
+            transparent
+            opacity={0.2}
+            side={THREE.FrontSide}
+          />
+        </mesh>
+      )}
+    </>
+  );
+}
+
+// Animated connection line component
+function AnimatedConnectionLine({ startPos, endPos, isVisible }: {
+  startPos: THREE.Vector3 | null;
+  endPos: THREE.Vector3 | null;
+  isVisible: boolean;
+}) {
+  const [lineProgress, setLineProgress] = useState(0);
+  const lineRef = useRef<any>();
+
+  useFrame(() => {
+    if (isVisible && lineProgress < 1) {
+      setLineProgress(prev => Math.min(prev + 0.08, 1));
+    } else if (!isVisible && lineProgress > 0) {
+      setLineProgress(prev => Math.max(prev - 0.08, 0));
+    }
+  });
+
+  if (!startPos || !endPos || lineProgress === 0) return null;
+
+  const currentEnd = new THREE.Vector3().lerpVectors(startPos, endPos, lineProgress);
+
+  return (
+    <>
+      <Line
+        ref={lineRef}
+        points={[startPos, currentEnd]}
+        color="#3b82f6"
+        lineWidth={3}
+        transparent
+        opacity={0.8 * lineProgress}
+      />
+      {lineProgress > 0.9 && (
+        <mesh position={endPos}>
+          <sphereGeometry args={[0.08, 16, 16]} />
+          <meshStandardMaterial
+            color="#3b82f6"
+            emissive="#3b82f6"
+            emissiveIntensity={1.5}
+            transparent
+            opacity={0.9}
+          />
+        </mesh>
+      )}
+    </>
   );
 }
 
@@ -90,13 +181,15 @@ function Scene({
   annotations,
   onObjectSelect,
   selectedObject,
-  selectedAnnotation
+  selectedAnnotation,
+  clickPosition
 }: {
   modelUrl: string;
   annotations: Annotation[];
   onObjectSelect: (object: THREE.Object3D | null, point: THREE.Vector3 | null) => void;
   selectedObject: THREE.Object3D | null;
   selectedAnnotation: Annotation | null;
+  clickPosition: THREE.Vector3 | null;
 }) {
   const gltf = useLoader(getGLTFLoader, modelUrl);
   const { camera } = useThree();
@@ -122,27 +215,40 @@ function Scene({
     const box = new THREE.Box3().setFromObject(gltf.scene);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const scale = 10 / maxDim; // Increased scale for better visibility
 
-    // Center the model on X and Z, but place it on the grid (Y=0)
+    // Calculate optimal scale to fit model nicely in view
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const scale = 5 / maxDim; // Reduced scale for closer view
+
+    // Center the model at origin
     gltf.scene.position.x = -center.x * scale;
     gltf.scene.position.z = -center.z * scale;
     gltf.scene.position.y = -box.min.y * scale; // Place bottom of model on grid
     gltf.scene.scale.setScalar(scale);
 
-    // Adjust camera for better initial view
-    const dist = Math.max(size.x, size.z) * scale;
-    camera.position.set(dist, dist * 0.7, dist);
-    camera.lookAt(0, size.y * scale / 2, 0);
+    // Calculate scaled dimensions
+    const scaledHeight = size.y * scale;
+    const scaledWidth = size.x * scale;
+    const scaledDepth = size.z * scale;
+
+    // Position camera to frame the model properly - closer view
+    const distance = Math.max(scaledWidth, scaledDepth, scaledHeight) * 1.2; // Reduced multiplier
+    const cameraHeight = scaledHeight * 0.5 + 2; // Simpler height calculation
+
+    camera.position.set(distance, cameraHeight, distance);
+    camera.lookAt(0, scaledHeight * 0.3, 0); // Look slightly lower on the model
+    camera.updateProjectionMatrix();
   }, [gltf, camera]);
 
   return (
     <>
       {/* Lighting */}
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[10, 10, 5]} intensity={1} />
-      <Environment preset="studio" />
+      <ambientLight intensity={1.2} />
+      <directionalLight position={[10, 10, 5]} intensity={3} castShadow />
+      <directionalLight position={[-5, 5, -5]} intensity={2} />
+      <directionalLight position={[0, -5, 0]} intensity={1.5} />
+      <pointLight position={[0, 10, 0]} intensity={2} />
+      <Environment preset="studio" background={false} />
 
       {/* Grid */}
       <Grid
@@ -166,61 +272,19 @@ function Scene({
         ))}
       </group>
 
-      {/* Render annotation markers */}
-      {annotations.map((annotation, index) => (
-        <group key={annotation.id || index}>
-          <mesh
-            position={[annotation.position_x, annotation.position_y, annotation.position_z]}
-            onClick={(e) => {
-              e.stopPropagation();
-              // Select this annotation when clicked
-              const existingAnnotation = annotations.find(a => a.id === annotation.id);
-              if (existingAnnotation && onObjectSelect) {
-                onObjectSelect(null, new THREE.Vector3(annotation.position_x, annotation.position_y, annotation.position_z));
-              }
-            }}
-            onPointerOver={(e) => {
-              e.stopPropagation();
-              document.body.style.cursor = 'pointer';
-            }}
-            onPointerOut={(e) => {
-              e.stopPropagation();
-              document.body.style.cursor = 'default';
-            }}
-          >
-            <sphereGeometry args={[0.1, 16, 16]} />
-            <meshStandardMaterial
-              color={selectedAnnotation?.id === annotation.id ? "#00ff00" : "#ff0000"}
-              emissive={selectedAnnotation?.id === annotation.id ? "#00ff00" : "#ff0000"}
-              emissiveIntensity={0.5}
-            />
-          </mesh>
-          <Html
-            position={[annotation.position_x, annotation.position_y + 0.2, annotation.position_z]}
-            center
-          >
-            <div className="bg-white px-2 py-1 rounded shadow-lg text-xs whitespace-nowrap pointer-events-none">
-              {annotation.title || 'Untitled'}
-            </div>
-          </Html>
-        </group>
-      ))}
+      {/* Annotations are now only visible when objects are selected - no always-visible markers */}
 
-      {/* Transform controls for selected annotation */}
-      {selectedAnnotation && (
-        <group>
-          <mesh
-            position={[
-              selectedAnnotation.position_x,
-              selectedAnnotation.position_y,
-              selectedAnnotation.position_z
-            ]}
-            visible={false}
-          >
-            <boxGeometry args={[0.1, 0.1, 0.1]} />
-            <meshBasicMaterial />
-          </mesh>
-        </group>
+      {/* Connection line from object to annotation point */}
+      {selectedAnnotation && clickPosition && (
+        <AnimatedConnectionLine
+          startPos={clickPosition}
+          endPos={new THREE.Vector3(
+            selectedAnnotation.position_x,
+            selectedAnnotation.position_y,
+            selectedAnnotation.position_z
+          )}
+          isVisible={true}
+        />
       )}
 
       {/* Controls */}
@@ -232,7 +296,7 @@ function Scene({
         minDistance={0.5}
         maxDistance={100}
         maxPolarAngle={Math.PI * 0.85}
-        target={[0, 2, 0]}
+        target={[0, 0.5, 0]} // Lower target for better centering
       />
       <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
         <GizmoViewport />
@@ -251,8 +315,10 @@ export default function ModelEditor({
 }: ModelEditorProps) {
   const [selectedObject, setSelectedObject] = useState<THREE.Object3D | null>(null);
   const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
-  const [_clickPosition, setClickPosition] = useState<THREE.Vector3 | null>(null);
+  const [clickPosition, setClickPosition] = useState<THREE.Vector3 | null>(null);
   const [showPanel, setShowPanel] = useState(false);
+  const [screenPosition, setScreenPosition] = useState<{ x: number; y: number } | null>(null);
+  const [showHUD, setShowHUD] = useState(false);
 
   const handleObjectSelect = useCallback((object: THREE.Object3D | null, point: THREE.Vector3 | null) => {
     setSelectedObject(object);
@@ -280,9 +346,12 @@ export default function ModelEditor({
         setSelectedAnnotation(newAnnotation);
       }
       setShowPanel(true);
+      setShowHUD(true);
     } else {
       setShowPanel(false);
       setSelectedAnnotation(null);
+      setShowHUD(false);
+      setScreenPosition(null);
     }
   }, [annotations, modelId]);
 
@@ -331,9 +400,23 @@ export default function ModelEditor({
     <div className="relative w-full h-full">
       {/* 3D Canvas */}
       <Canvas
-        camera={{ position: [5, 5, 5], fov: 50 }}
+        camera={{ position: [5, 4, 5], fov: 50 }} // Closer initial position
         shadows
         className="bg-gradient-to-b from-gray-100 to-gray-300"
+        onCreated={({ gl, camera }) => {
+          // Update screen position when camera moves
+          const updateScreenPos = () => {
+            if (clickPosition) {
+              const vector = clickPosition.clone();
+              vector.project(camera);
+              const x = (vector.x * 0.5 + 0.5) * gl.domElement.clientWidth;
+              const y = (-vector.y * 0.5 + 0.5) * gl.domElement.clientHeight;
+              setScreenPosition({ x, y });
+            }
+          };
+          gl.domElement.addEventListener('mousemove', updateScreenPos);
+          gl.domElement.addEventListener('wheel', updateScreenPos);
+        }}
       >
         <Scene
           modelUrl={modelUrl}
@@ -341,11 +424,31 @@ export default function ModelEditor({
           onObjectSelect={handleObjectSelect}
           selectedObject={selectedObject}
           selectedAnnotation={selectedAnnotation}
+          clickPosition={clickPosition}
         />
       </Canvas>
 
-      {/* Annotation Panel */}
-      {showPanel && selectedAnnotation && (
+      {/* HUD Annotation Card */}
+      {typeof window !== 'undefined' && document.body && screenPosition && (
+        createPortal(
+          <HUDAnnotationCard
+            annotation={selectedAnnotation}
+            screenPosition={screenPosition}
+            onClose={() => {
+              setShowHUD(false);
+              setSelectedAnnotation(null);
+              setSelectedObject(null);
+              setClickPosition(null);
+              setShowPanel(false);
+            }}
+            isVisible={showHUD}
+          />,
+          document.body
+        )
+      )}
+
+      {/* Keep the traditional annotation panel hidden but available for editing */}
+      {showPanel && selectedAnnotation && false && (
         <AnnotationPanel
           annotation={selectedAnnotation}
           onUpdate={handleAnnotationUpdate}
@@ -354,20 +457,37 @@ export default function ModelEditor({
             setShowPanel(false);
             setSelectedAnnotation(null);
             setSelectedObject(null);
+            setClickPosition(null);
           }}
         />
       )}
 
-      {/* Instructions */}
-      <div className="absolute top-4 left-4 bg-white/90 p-4 rounded-lg shadow-lg max-w-sm">
-        <h3 className="font-semibold mb-2">Instructions:</h3>
-        <ul className="text-sm space-y-1">
-          <li>• Click on any object to add/edit annotation</li>
-          <li>• Use mouse to rotate, zoom, and pan the view</li>
-          <li>• Drag annotation markers to reposition them</li>
-          <li>• Press ESC to deselect</li>
-          <li>• Press Delete to remove selected annotation</li>
-          <li>• Click Save to persist all changes</li>
+      {/* Updated Instructions */}
+      <div className="absolute top-4 left-4 bg-gray-900/90 backdrop-blur-md p-4 rounded-lg shadow-lg max-w-sm border border-blue-500/30"
+        style={{ boxShadow: '0 0 20px rgba(59, 130, 246, 0.2)' }}
+      >
+        <h3 className="font-semibold mb-2 text-blue-100">HUD Mode Instructions:</h3>
+        <ul className="text-sm space-y-1 text-gray-300">
+          <li className="flex items-center gap-2">
+            <span className="text-blue-400">•</span>
+            Click any object to view its annotation
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="text-blue-400">•</span>
+            Selected objects glow with blue highlight
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="text-blue-400">•</span>
+            HUD displays annotation details
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="text-blue-400">•</span>
+            Press ESC to deselect
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="text-blue-400">•</span>
+            Use mouse to navigate the 3D view
+          </li>
         </ul>
       </div>
 

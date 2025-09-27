@@ -1,16 +1,18 @@
 'use client';
 
 import { use, useEffect, useState, useCallback } from 'react';
+import toast, { Toaster } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase/client';
 import type { Model, Annotation } from '@/types';
 
-const ModelEditor = dynamic(() => import('@/components/3d/ModelEditor'), {
+// Use the new dark enhanced editor
+const DarkEnhancedModelEditor = dynamic(() => import('@/components/3d/DarkEnhancedModelEditor'), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-screen">
-      <div className="text-lg">Loading 3D Editor...</div>
+    <div className="flex items-center justify-center h-screen bg-black">
+      <div className="text-lg text-white">Loading Enhanced 3D Editor...</div>
     </div>
   ),
 });
@@ -125,7 +127,10 @@ export default function EditModelPage({ params }: EditPageProps) {
 
       // Success feedback
       console.log('Annotations saved successfully!');
-      alert('Annotations saved successfully!');
+      toast.success('Annotations saved successfully!', {
+        position: 'bottom-left',
+        duration: 3000,
+      });
 
       // Fetch updated annotations to sync IDs
       await fetchModelData();
@@ -137,11 +142,20 @@ export default function EditModelPage({ params }: EditPageProps) {
       if (error instanceof Error) {
         console.error('Error message:', error.message);
         console.error('Error stack:', error.stack);
-        alert(`Failed to save annotations: ${error.message}`);
+        toast.error(`Failed to save annotations: ${error.message}`, {
+          position: 'bottom-left',
+          duration: 4000,
+        });
       } else if (typeof error === 'object' && error !== null && 'message' in error) {
-        alert(`Failed to save annotations: ${(error as any).message}`);
+        toast.error(`Failed to save annotations: ${(error as any).message}`, {
+          position: 'bottom-left',
+          duration: 4000,
+        });
       } else {
-        alert('Failed to save annotations. Please check the console for details.');
+        toast.error('Failed to save annotations. Please check the console for details.', {
+          position: 'bottom-left',
+          duration: 4000,
+        });
       }
     } finally {
       setSaving(false);
@@ -165,50 +179,41 @@ export default function EditModelPage({ params }: EditPageProps) {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-100">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div>
-              <h1 className="text-2xl font-bold">Edit Model: {model.name}</h1>
-              <p className="text-gray-600">Click on objects to add annotations</p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => router.push('/admin')}
-                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => router.push(`/viewer/${resolvedParams.id}`)}
-                className="px-4 py-2 border border-blue-500 text-blue-500 rounded-md hover:bg-blue-50"
-              >
-                Preview
-              </button>
-              <button
-                onClick={() => handleSaveAnnotations(annotations)}
-                disabled={saving}
-                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save Annotations'}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="h-screen bg-black">
+      {/* Use the dark enhanced editor directly without header */}
+      <DarkEnhancedModelEditor
+        modelUrl={model.file_url}
+        modelId={resolvedParams.id}
+        annotations={annotations}
+        onAnnotationsChange={setAnnotations}
+        onSave={() => handleSaveAnnotations(annotations)}
+      />
 
-      {/* 3D Editor */}
-      <div className="flex-1 relative">
-        <ModelEditor
-          modelUrl={model.file_url}
-          modelId={resolvedParams.id}
-          annotations={annotations}
-          onAnnotationsChange={setAnnotations}
-          onSave={handleSaveAnnotations}
-        />
-      </div>
+      {/* Toast Notifications */}
+      <Toaster
+        toastOptions={{
+          className: '',
+          style: {
+            background: 'rgba(17, 24, 39, 0.95)',
+            color: '#fff',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '8px',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10b981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
     </div>
   );
 }
