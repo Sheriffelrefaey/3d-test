@@ -91,12 +91,16 @@ export default function EditModelPage({ params }: EditPageProps) {
       }
 
       // Success feedback
-      console.error('Annotations saved successfully!');
+      console.log('Annotations saved successfully!');
 
       // Fetch updated annotations to sync IDs
       await fetchModelData();
     } catch (error) {
       console.error('Error saving annotations:', error);
+      // Show more detailed error information
+      if (error instanceof Error) {
+        console.error('Error message:', error.message);
+      }
     } finally {
       setSaving(false);
     }

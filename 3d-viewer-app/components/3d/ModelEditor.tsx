@@ -4,7 +4,6 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Canvas, useThree, useLoader } from '@react-three/fiber';
 import {
   OrbitControls,
-  TransformControls,
   Environment,
   Grid,
   GizmoHelper,
@@ -90,15 +89,13 @@ function Scene({
   annotations,
   onObjectSelect,
   selectedObject,
-  selectedAnnotation,
-  onAnnotationPositionChange
+  selectedAnnotation
 }: {
   modelUrl: string;
   annotations: Annotation[];
   onObjectSelect: (object: THREE.Object3D | null, point: THREE.Vector3 | null) => void;
   selectedObject: THREE.Object3D | null;
   selectedAnnotation: Annotation | null;
-  onAnnotationPositionChange: (annotation: Annotation, position: THREE.Vector3) => void;
 }) {
   const gltf = useLoader(getGLTFLoader, modelUrl);
   const { camera } = useThree();
@@ -169,6 +166,22 @@ function Scene({
         <group key={annotation.id || index}>
           <mesh
             position={[annotation.position_x, annotation.position_y, annotation.position_z]}
+            onClick={(e) => {
+              e.stopPropagation();
+              // Select this annotation when clicked
+              const existingAnnotation = annotations.find(a => a.id === annotation.id);
+              if (existingAnnotation && onObjectSelect) {
+                onObjectSelect(null, new THREE.Vector3(annotation.position_x, annotation.position_y, annotation.position_z));
+              }
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              document.body.style.cursor = 'pointer';
+            }}
+            onPointerOut={(e) => {
+              e.stopPropagation();
+              document.body.style.cursor = 'default';
+            }}
           >
             <sphereGeometry args={[0.1, 16, 16]} />
             <meshStandardMaterial
@@ -181,8 +194,8 @@ function Scene({
             position={[annotation.position_x, annotation.position_y + 0.2, annotation.position_z]}
             center
           >
-            <div className="bg-white px-2 py-1 rounded shadow-lg text-xs whitespace-nowrap">
-              {annotation.title}
+            <div className="bg-white px-2 py-1 rounded shadow-lg text-xs whitespace-nowrap pointer-events-none">
+              {annotation.title || 'Untitled'}
             </div>
           </Html>
         </group>
@@ -190,23 +203,19 @@ function Scene({
 
       {/* Transform controls for selected annotation */}
       {selectedAnnotation && (
-        <TransformControls
-          object={(() => {
-            const dummy = new THREE.Object3D();
-            dummy.position.set(
+        <group>
+          <mesh
+            position={[
               selectedAnnotation.position_x,
               selectedAnnotation.position_y,
               selectedAnnotation.position_z
-            );
-            return dummy;
-          })()}
-          onObjectChange={(e) => {
-            if (e && e.target && typeof e.target === 'object' && e.target !== null && 'object' in e.target) {
-              const pos = (e.target as { object: THREE.Object3D }).object.position;
-              onAnnotationPositionChange(selectedAnnotation, pos);
-            }
-          }}
-        />
+            ]}
+            visible={false}
+          >
+            <boxGeometry args={[0.1, 0.1, 0.1]} />
+            <meshBasicMaterial />
+          </mesh>
+        </group>
       )}
 
       {/* Controls */}
@@ -288,16 +297,6 @@ export default function ModelEditor({
     setShowPanel(false);
   }, [annotations, onAnnotationsChange]);
 
-  const handleAnnotationPositionChange = useCallback((annotation: Annotation, position: THREE.Vector3) => {
-    const updatedAnnotation = {
-      ...annotation,
-      position_x: position.x,
-      position_y: position.y,
-      position_z: position.z,
-    };
-    handleAnnotationUpdate(updatedAnnotation);
-  }, [handleAnnotationUpdate]);
-
   const handleKeyPress = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       setSelectedObject(null);
@@ -327,7 +326,6 @@ export default function ModelEditor({
           onObjectSelect={handleObjectSelect}
           selectedObject={selectedObject}
           selectedAnnotation={selectedAnnotation}
-          onAnnotationPositionChange={handleAnnotationPositionChange}
         />
       </Canvas>
 
