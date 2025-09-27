@@ -13,12 +13,14 @@ export interface Model {
 export interface Annotation {
   id: string;
   model_id: string;
-  object_name: string;
   title: string;
   description?: string;
+  position?: { x: number; y: number; z: number };
+  // For compatibility, we still use these internally
   position_x: number;
   position_y: number;
   position_z: number;
+  object_name?: string;
   normal?: { x: number; y: number; z: number };
   color?: string;
   icon?: string;

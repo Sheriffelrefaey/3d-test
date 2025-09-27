@@ -67,7 +67,15 @@ export default function ViewerPage({ params }: ViewerPageProps) {
           .eq('model_id', resolvedParams.id);
 
         if (!annotationsError && annotationsData) {
-          setAnnotations(annotationsData);
+          // Convert position format
+          const convertedAnnotations = annotationsData.map(ann => ({
+            ...ann,
+            position_x: ann.position?.x || 0,
+            position_y: ann.position?.y || 0,
+            position_z: ann.position?.z || 0,
+            object_name: ann.object_name || 'Object'
+          }));
+          setAnnotations(convertedAnnotations);
         } else {
           // No annotations found, leave empty
           setAnnotations([]);

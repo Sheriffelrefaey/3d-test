@@ -48,7 +48,17 @@ export default function EditModelPage({ params }: EditPageProps) {
         .eq('model_id', resolvedParams.id);
 
       if (annotationError) throw annotationError;
-      setAnnotations(annotationData || []);
+
+      // Convert position format
+      const convertedAnnotations = (annotationData || []).map(ann => ({
+        ...ann,
+        position_x: ann.position?.x || 0,
+        position_y: ann.position?.y || 0,
+        position_z: ann.position?.z || 0,
+        object_name: ann.object_name || 'Object'
+      }));
+
+      setAnnotations(convertedAnnotations);
     } catch (error) {
       console.error('Error fetching model data:', error);
     } finally {
@@ -85,12 +95,14 @@ export default function EditModelPage({ params }: EditPageProps) {
         if (validAnnotations.length > 0) {
           const annotationsToInsert = validAnnotations.map(ann => ({
             model_id: resolvedParams.id,
-            object_name: ann.object_name || 'Unknown',
             title: ann.title,
             description: ann.description || '',
-            position_x: ann.position_x || 0,
-            position_y: ann.position_y || 0,
-            position_z: ann.position_z || 0,
+            position: {
+              x: ann.position_x || 0,
+              y: ann.position_y || 0,
+              z: ann.position_z || 0
+            },
+            color: ann.color || '#ff0000'
           }));
 
           console.log('Inserting annotations:', annotationsToInsert);
@@ -102,7 +114,9 @@ export default function EditModelPage({ params }: EditPageProps) {
 
           if (insertError) {
             console.error('Insert error:', insertError);
-            throw insertError;
+            console.error('Insert error details:', JSON.stringify(insertError, null, 2));
+            console.error('Data being inserted:', JSON.stringify(annotationsToInsert, null, 2));
+            throw new Error(insertError.message || 'Failed to insert annotations');
           }
 
           console.log('Inserted annotations:', insertData);
@@ -117,10 +131,15 @@ export default function EditModelPage({ params }: EditPageProps) {
       await fetchModelData();
     } catch (error) {
       console.error('Error saving annotations:', error);
+      console.error('Full error object:', JSON.stringify(error, null, 2));
+
       // Show more detailed error information
       if (error instanceof Error) {
         console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
         alert(`Failed to save annotations: ${error.message}`);
+      } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        alert(`Failed to save annotations: ${(error as any).message}`);
       } else {
         alert('Failed to save annotations. Please check the console for details.');
       }
