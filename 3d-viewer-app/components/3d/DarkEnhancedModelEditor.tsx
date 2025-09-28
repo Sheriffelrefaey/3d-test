@@ -1064,7 +1064,6 @@ export default function DarkEnhancedModelEditor({
 
     loadGroups(modelId).then((groups) => {
       setMeshGroups(groups);
-      console.log('Loaded groups from database:', groups);
     });
   }, [modelId, setModelId, loadState]);
 
@@ -1170,7 +1169,6 @@ export default function DarkEnhancedModelEditor({
         meshGroups.forEach((members, groupName) => {
           if (members.includes(mesh.name)) {
             mesh.userData = { ...mesh.userData, group: groupName };
-            console.log(`Restored group association: ${mesh.name} -> ${groupName}`);
           }
         });
       });
@@ -1319,6 +1317,7 @@ export default function DarkEnhancedModelEditor({
     if (object && point) {
       // Check for annotation - first by object name, then by group name
       const groupName = object.userData?.group;
+
       let existingAnnotation = annotations.find(a => a.object_name === object.name);
 
       // If no annotation found for object, check for group annotation

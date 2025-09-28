@@ -97,6 +97,7 @@ export default function EditModelPage({ params }: EditPageProps) {
         if (validAnnotations.length > 0) {
           const annotationsToInsert = validAnnotations.map(ann => ({
             model_id: resolvedParams.id,
+            object_name: ann.object_name || 'Object', // Include object_name field
             title: ann.title,
             description: ann.description || '',
             position: {
