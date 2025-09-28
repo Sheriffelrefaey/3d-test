@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect, Suspense } from 'react';
-import { Canvas, useThree, useLoader, useFrame } from '@react-three/fiber';
+import { Canvas, useThree, useLoader } from '@react-three/fiber';
 import {
   OrbitControls,
   Environment,
@@ -12,29 +12,22 @@ import {
   TransformControls
 } from '@react-three/drei';
 import * as THREE from 'three';
-import { Leva, useControls, folder } from 'leva';
-import { Save, Undo, Redo, Download, Upload, Settings2 } from 'lucide-react';
+import { Save, Undo, Redo } from 'lucide-react';
 
 // Components
 import MaterialPanel from '@/components/editor/MaterialPanel';
 import EnvironmentPanel from '@/components/editor/EnvironmentPanel';
-import ColorPicker from '@/components/editor/ColorPicker';
-import GradientEditor from '@/components/editor/GradientEditor';
 import AnnotationPanel from '@/components/ui/AnnotationPanel';
 
 // Store and utilities
 import { useEditorStore } from '@/lib/store/editorStore';
-import { materialToThreeJS, applyMaterialPreset } from '@/lib/materials/presets';
-import { getGLTFLoader } from '@/lib/three/loaders';
+import { materialToThreeJS } from '@/lib/materials/presets';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Types
 import type {
   Annotation,
   ObjectMaterial,
-  ObjectTransform,
-  ModelEnvironment,
-  Color,
-  MaterialPreset
 } from '@/types';
 
 interface EnhancedModelEditorProps {
@@ -57,24 +50,24 @@ function EnhancedScene({
   onObjectSelect: (object: THREE.Object3D | null, point: THREE.Vector3 | null) => void;
   selectedObject: THREE.Object3D | null;
 }) {
-  const gltf = useLoader(getGLTFLoader, modelUrl);
+  const gltf = useLoader(GLTFLoader, modelUrl);
   const { camera, scene } = useThree();
   const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
-  const transformControlsRef = useRef<any>();
+  const transformControlsRef = useRef<any>(null);
 
   // Get store state
   const {
     materials,
     transforms,
     environment,
-    selectedObject: selectedObjectName
+    selectedObject: _selectedObjectName
   } = useEditorStore();
 
   // Extract meshes from model
   useEffect(() => {
     const extractedMeshes: THREE.Mesh[] = [];
 
-    gltf.scene.traverse((child) => {
+    gltf.scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         if (!child.name) {
           child.name = `Object_${extractedMeshes.length + 1}`;
@@ -82,7 +75,7 @@ function EnhancedScene({
         extractedMeshes.push(child);
 
         // Store original material
-        child.userData.originalMaterial = child.material;
+        child.userData['originalMaterial'] = child.material;
       }
     });
 
@@ -123,7 +116,7 @@ function EnhancedScene({
         mesh.material = new THREE.MeshPhysicalMaterial(threeParams);
       } else {
         // Reset to original material
-        mesh.material = mesh.userData.originalMaterial || mesh.material;
+        mesh.material = mesh.userData['originalMaterial'] || mesh.material;
       }
     });
   }, [materials, meshes]);
@@ -482,10 +475,10 @@ export default function EnhancedModelEditor({
     try {
       await saveState();
       onSave();
-      alert('All settings saved successfully!');
+      console.warn('All settings saved successfully!');
     } catch (error) {
       console.error('Failed to save:', error);
-      alert('Failed to save settings');
+      console.error('Failed to save settings');
     }
   };
 
@@ -512,7 +505,7 @@ export default function EnhancedModelEditor({
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [selectedObjectName, deleteObject, undo, redo]);
 
-  const currentMaterial = selectedObjectName ? materials.get(selectedObjectName) : null;
+  const currentMaterial = selectedObjectName ? (materials.get(selectedObjectName) || null) : null;
 
   return (
     <div className="relative w-full h-full flex">
@@ -600,7 +593,7 @@ export default function EnhancedModelEditor({
                   deleteObject(selectedObjectName);
                 }
               }}
-              onVisibilityToggle={(visible) => {
+              onVisibilityToggle={() => {
                 if (selectedObjectName) {
                   toggleObjectVisibility(selectedObjectName);
                 }

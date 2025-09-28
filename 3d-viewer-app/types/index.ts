@@ -95,6 +95,16 @@ export interface MaterialProperties {
   transmission?: number; // For glass materials
   thickness?: number;
   reflectivity?: number;
+  sheen?: number;
+  sheenRoughness?: number;
+  sheenColor?: Color;
+  anisotropy?: number;
+  anisotropyRotation?: number;
+  iridescence?: number;
+  iridescenceIOR?: number;
+  iridescenceThicknessRange?: [number, number];
+  specularIntensity?: number;
+  specularColor?: Color;
 }
 
 export type MaterialPreset =
@@ -116,7 +126,7 @@ export interface ObjectMaterial {
   id?: string;
   model_id: string;
   object_name: string;
-  material_type: 'custom' | 'preset';
+  material_type: 'custom' | 'preset' | 'physical';
   preset_name?: MaterialPreset;
   color: Color;
   texture_url?: string;
@@ -124,6 +134,8 @@ export interface ObjectMaterial {
   properties: MaterialProperties;
   created_at?: string;
   updated_at?: string;
+  hasUVs?: boolean;
+  locked?: boolean;
 }
 
 // Lighting Types
@@ -275,7 +287,7 @@ export interface EditorState {
 
 export interface EditorAction {
   type: string;
-  payload: any;
+  payload: unknown;
   timestamp: number;
 }
 

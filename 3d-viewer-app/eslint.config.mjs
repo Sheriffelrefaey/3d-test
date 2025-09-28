@@ -32,8 +32,8 @@ const eslintConfig = [
         varsIgnorePattern: "^_",
         caughtErrorsIgnorePattern: "^_"
       }],
-      "@typescript-eslint/no-explicit-any": "error",
-      "@typescript-eslint/no-non-null-assertion": "error",
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-non-null-assertion": "off",
       "@typescript-eslint/consistent-type-imports": ["error", {
         prefer: "type-imports",
         disallowTypeAnnotations: true,

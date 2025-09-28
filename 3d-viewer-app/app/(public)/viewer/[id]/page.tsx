@@ -4,7 +4,6 @@ import { use, useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import type { Annotation } from '@/types';
-import { Maximize2, Home, Settings, X, Eye, EyeOff, RotateCw, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import LoaderScreen from '@/components/ui/LoaderScreen';
 
@@ -36,10 +35,7 @@ export default function ViewerPage({ params }: ViewerPageProps) {
   const resolvedParams = use(params);
   const [model, setModel] = useState<Model | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
-  const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
-  const [showAnnotations, setShowAnnotations] = useState(true);
-  const [_isFullscreen, setIsFullscreen] = useState(false);
-  const [showSidebar, setShowSidebar] = useState(true);
+  const [_isFullscreen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showLoader, setShowLoader] = useState(true);
@@ -93,50 +89,6 @@ export default function ViewerPage({ params }: ViewerPageProps) {
     fetchModel();
   }, [resolvedParams.id]);
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    }
-  };
-
-  const handleReset = () => {
-    // Reset camera view - would be handled by ModelViewer
-    window.location.reload();
-  };
-
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return 'Unknown';
-    const mb = bytes / (1024 * 1024);
-    return mb < 1 ? `${(bytes / 1024).toFixed(2)} KB` : `${mb.toFixed(2)} MB`;
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffHours < 1) return 'Just now';
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    return date.toLocaleDateString();
-  };
-
-  const getFileFormat = (url: string) => {
-    const ext = url.split('.').pop()?.toLowerCase();
-    switch (ext) {
-      case 'glb': return 'GLB (Binary GLTF)';
-      case 'gltf': return 'GLTF 2.0';
-      case 'obj': return 'Wavefront OBJ';
-      case 'fbx': return 'Autodesk FBX';
-      default: return ext?.toUpperCase() || 'Unknown';
-    }
-  };
 
   // Remove the old loading screen - we use the new LoaderScreen component now
 

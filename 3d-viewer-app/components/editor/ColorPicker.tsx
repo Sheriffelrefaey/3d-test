@@ -58,9 +58,9 @@ export default function ColorPicker({
   const hexToColor = (hex: string): Color => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16),
+      r: parseInt(result[1] || '0', 16),
+      g: parseInt(result[2] || '0', 16),
+      b: parseInt(result[3] || '0', 16),
       a: localColor.a || 1
     } : localColor;
   };
@@ -73,7 +73,8 @@ export default function ColorPicker({
 
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
-    let h, s, l = (max + min) / 2;
+    let h, s;
+    const l = (max + min) / 2;
 
     if (max === min) {
       h = s = 0;
@@ -174,12 +175,12 @@ export default function ColorPicker({
   // Eyedropper API (Chrome only)
   const useEyedropper = async () => {
     if (!('EyeDropper' in window)) {
-      alert('Eyedropper is not supported in your browser');
+      console.warn('Eyedropper is not supported in your browser');
       return;
     }
 
     try {
-      // @ts-ignore - EyeDropper API is not in TypeScript yet
+      // @ts-expect-error - EyeDropper API is not in TypeScript yet
       const eyeDropper = new window.EyeDropper();
       const result = await eyeDropper.open();
       const color = hexToColor(result.sRGBHex);
@@ -294,7 +295,7 @@ export default function ColorPicker({
             />
           ) : (
             <RgbaColorPicker
-              color={localColor}
+              color={{...localColor, a: localColor.a ?? 1}}
               onChange={handleColorChange}
             />
           )}

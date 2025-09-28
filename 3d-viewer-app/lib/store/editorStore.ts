@@ -4,7 +4,7 @@ import type {
   ObjectMaterial,
   ObjectTransform,
   ModelEnvironment,
-  Color,
+  Color as _Color,
   MaterialPreset,
   Lighting,
   Background,
@@ -155,7 +155,7 @@ export const useEditorStore = create<EditorStore>()(
           const materialWithId = {
             ...material,
             id: material.id || crypto.randomUUID(),
-            material_type: material.material_type === 'preset' ? 'preset' : 'custom'
+            material_type: (material.material_type === 'preset' ? 'preset' : 'custom') as 'preset' | 'custom'
           };
 
           const newMaterials = new Map(state.materials);
@@ -189,10 +189,12 @@ export const useEditorStore = create<EditorStore>()(
           if (property.includes('.')) {
             // Handle nested properties like 'properties.metalness'
             const [parent, child] = property.split('.');
-            (newMaterial as any)[parent] = {
-              ...(newMaterial as any)[parent],
-              [child]: value
-            };
+            if (parent && child) {
+              (newMaterial as any)[parent] = {
+                ...(newMaterial as any)[parent],
+                [child]: value
+              };
+            }
           } else {
             (newMaterial as any)[property] = value;
           }
@@ -600,7 +602,7 @@ export const useEditorStore = create<EditorStore>()(
           // Save materials
           const materialsArray = Array.from(state.materials.values()).map(m => ({
             ...m,
-            model_id: state.modelId
+            model_id: state.modelId!
           }));
           if (materialsArray.length > 0) {
             await saveMaterials(materialsArray);
@@ -609,7 +611,7 @@ export const useEditorStore = create<EditorStore>()(
           // Save transforms
           const transformsArray = Array.from(state.transforms.values()).map(t => ({
             ...t,
-            model_id: state.modelId
+            model_id: state.modelId!
           }));
           if (transformsArray.length > 0) {
             await saveTransforms(transformsArray);
@@ -619,7 +621,7 @@ export const useEditorStore = create<EditorStore>()(
           if (state.environment) {
             await saveEnvironment({
               ...state.environment,
-              model_id: state.modelId
+              model_id: state.modelId!
             });
           }
 

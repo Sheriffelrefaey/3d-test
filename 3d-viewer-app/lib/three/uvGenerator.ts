@@ -6,11 +6,15 @@ import * as THREE from 'three';
  */
 export function generateUVs(geometry: THREE.BufferGeometry): void {
   // Check if UVs already exist
-  if (geometry.attributes.uv) {
+  if (geometry.attributes['uv'] as THREE.BufferAttribute) {
     return;
   }
 
-  const position = geometry.attributes.position;
+  const position = geometry.attributes['position'] as THREE.BufferAttribute;
+  if (!position) {
+    console.warn('Geometry has no position attribute');
+    return;
+  }
   const uvs = [];
 
   // Get bounding box for normalization
@@ -29,16 +33,16 @@ export function generateUVs(geometry: THREE.BufferGeometry): void {
     for (let i = 0; i < vertexCount; i++) {
       const x = position.getX(i);
       const y = position.getY(i);
-      const z = position.getZ(i);
+      // const z = position.getZ(i); // Unused in current implementation
 
       // Project to 2D using the most appropriate plane based on geometry orientation
       // We'll use a box projection approach
       let u = 0, v = 0;
 
-      // Determine the dominant axis for this vertex
-      const nx = Math.abs(x - bbox.min.x) / size.x;
-      const ny = Math.abs(y - bbox.min.y) / size.y;
-      const nz = Math.abs(z - bbox.min.z) / size.z;
+      // Determine the dominant axis for this vertex (variables unused but kept for clarity)
+      // const nx = Math.abs(x - bbox.min.x) / size.x;
+      // const ny = Math.abs(y - bbox.min.y) / size.y;
+      // const nz = Math.abs(z - bbox.min.z) / size.z;
 
       // Use XY plane projection (looking down Z axis)
       u = (x - bbox.min.x) / size.x;
@@ -55,7 +59,7 @@ export function generateUVs(geometry: THREE.BufferGeometry): void {
         const index = face * 3 + vertex;
         const x = position.getX(index);
         const y = position.getY(index);
-        const z = position.getZ(index);
+        // const z = position.getZ(index); // Unused in planar projection
 
         // Calculate UV based on position
         // Using planar projection
@@ -69,7 +73,10 @@ export function generateUVs(geometry: THREE.BufferGeometry): void {
 
   // Set the UV attribute
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.attributes.uv.needsUpdate = true;
+  const uvAttr = geometry.attributes['uv'] as THREE.BufferAttribute;
+  if (uvAttr) {
+    uvAttr.needsUpdate = true;
+  }
 }
 
 /**
@@ -77,11 +84,15 @@ export function generateUVs(geometry: THREE.BufferGeometry): void {
  * Better for round/curved objects
  */
 export function generateSphericalUVs(geometry: THREE.BufferGeometry): void {
-  if (geometry.attributes.uv) {
+  if (geometry.attributes['uv'] as THREE.BufferAttribute) {
     return;
   }
 
-  const position = geometry.attributes.position;
+  const position = geometry.attributes['position'] as THREE.BufferAttribute;
+  if (!position) {
+    console.warn('Geometry has no position attribute');
+    return;
+  }
   const uvs = [];
 
   // Get center of geometry
@@ -109,7 +120,10 @@ export function generateSphericalUVs(geometry: THREE.BufferGeometry): void {
   }
 
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.attributes.uv.needsUpdate = true;
+  const uvAttr = geometry.attributes['uv'] as THREE.BufferAttribute;
+  if (uvAttr) {
+    uvAttr.needsUpdate = true;
+  }
 }
 
 /**
@@ -117,12 +131,17 @@ export function generateSphericalUVs(geometry: THREE.BufferGeometry): void {
  * Projects each face onto a 2D plane
  */
 export function generateBoxUVs(geometry: THREE.BufferGeometry): void {
-  if (geometry.attributes.uv) {
+  if (geometry.attributes['uv'] as THREE.BufferAttribute) {
     return;
   }
 
-  const position = geometry.attributes.position;
-  const normal = geometry.attributes.normal;
+  const position = geometry.attributes['position'] as THREE.BufferAttribute;
+  const normal = geometry.attributes['normal'] as THREE.BufferAttribute;
+
+  if (!position) {
+    console.warn('Geometry has no position attribute');
+    return;
+  }
   const uvs = [];
 
   if (!normal) {
@@ -169,18 +188,21 @@ export function generateBoxUVs(geometry: THREE.BufferGeometry): void {
   }
 
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geometry.attributes.uv.needsUpdate = true;
+  const uvAttr = geometry.attributes['uv'] as THREE.BufferAttribute;
+  if (uvAttr) {
+    uvAttr.needsUpdate = true;
+  }
 }
 
 /**
  * Automatically choose the best UV generation method based on geometry characteristics
  */
 export function autoGenerateUVs(geometry: THREE.BufferGeometry, meshName?: string): void {
-  if (geometry.attributes.uv) {
+  if (geometry.attributes['uv'] as THREE.BufferAttribute) {
     return;
   }
 
-  console.log(`Generating UV coordinates for mesh: ${meshName || 'unnamed'}`);
+  console.warn(`Generating UV coordinates for mesh: ${meshName || 'unnamed'}`);
 
   // Analyze geometry to determine best UV mapping method
   geometry.computeBoundingSphere();
@@ -206,17 +228,17 @@ export function autoGenerateUVs(geometry: THREE.BufferGeometry, meshName?: strin
   // Determine best UV mapping method
   if (sphericalRatio > 0.5 && sphericalRatio < 2) {
     // Roughly spherical
-    console.log(`Using spherical UV mapping for ${meshName}`);
+    console.warn(`Using spherical UV mapping for ${meshName}`);
     generateSphericalUVs(geometry);
   } else if (Math.max(...aspectRatios) > 3) {
     // Very elongated, use planar projection
-    console.log(`Using planar UV mapping for ${meshName}`);
+    console.warn(`Using planar UV mapping for ${meshName}`);
     generateUVs(geometry);
   } else {
     // Default to box mapping for most objects
-    console.log(`Using box UV mapping for ${meshName}`);
+    console.warn(`Using box UV mapping for ${meshName}`);
     generateBoxUVs(geometry);
   }
 
-  console.log(`UV coordinates generated successfully for ${meshName}`);
+  console.warn(`UV coordinates generated successfully for ${meshName}`);
 }

@@ -12,7 +12,7 @@ import {
 } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Annotation } from '@/types';
-import { getGLTFLoader } from '@/lib/three/loaders';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 interface ModelViewerWithAnnotationsProps {
   modelUrl: string;
@@ -83,11 +83,11 @@ function ModelWithAnnotations({
   targetPosition: THREE.Vector3 | null;
   clickedMesh: THREE.Mesh | null;
 }) {
-  const gltf = useLoader(getGLTFLoader, modelUrl);
+  const gltf = useLoader(GLTFLoader, modelUrl);
   const { camera } = useThree();
   const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
   const [hoveredMesh, setHoveredMesh] = useState<THREE.Mesh | null>(null);
-  const controlsRef = useRef<any>();
+  const controlsRef = useRef<any>(null);
   const [modelScale, setModelScale] = useState(1);
 
   // Smooth camera animation to target position
@@ -114,7 +114,7 @@ function ModelWithAnnotations({
     // Extract meshes and auto-fit model
     const extractedMeshes: THREE.Mesh[] = [];
 
-    gltf.scene.traverse((child) => {
+    gltf.scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         // Give each mesh a name if it doesn't have one
         if (!child.name) {
@@ -123,7 +123,7 @@ function ModelWithAnnotations({
         extractedMeshes.push(child);
 
         // Store original material
-        child.userData.originalMaterial = child.material;
+        child.userData['originalMaterial'] = child.material;
       }
     });
 
@@ -172,7 +172,7 @@ function ModelWithAnnotations({
   const handleMeshHover = (mesh: THREE.Mesh | null) => {
     // Reset previous hovered mesh if it's not the clicked mesh
     if (hoveredMesh && hoveredMesh !== mesh && hoveredMesh !== clickedMesh) {
-      hoveredMesh.material = hoveredMesh.userData.originalMaterial;
+      hoveredMesh.material = hoveredMesh.userData['originalMaterial'];
     }
 
     // Highlight new hovered mesh
@@ -206,7 +206,7 @@ function ModelWithAnnotations({
       });
     } else {
       // Default material
-      return mesh.userData.originalMaterial;
+      return mesh.userData['originalMaterial'];
     }
   };
 

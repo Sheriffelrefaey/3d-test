@@ -12,9 +12,9 @@ import {
 } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Annotation } from '@/types';
-import AnnotationPanel from '@/components/ui/AnnotationPanel';
-import { getGLTFLoader } from '@/lib/three/loaders';
-import { HUDAnnotationCard, ObjectGlowEffect, ConnectionLine } from './HUDAnnotation';
+// import AnnotationPanel from '@/components/ui/AnnotationPanel';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { HUDAnnotationCard } from './HUDAnnotation';
 import { createPortal } from 'react-dom';
 
 interface ModelEditorProps {
@@ -51,8 +51,13 @@ function ClickableObject({ object, onSelect, isSelected }: ClickableObjectProps)
   useFrame(({ clock }) => {
     if (glowRef.current && isSelected) {
       const pulse = Math.sin(clock.getElapsedTime() * 2) * 0.5 + 0.5;
-      glowRef.current.material.emissiveIntensity = 0.3 + pulse * 0.3;
-      glowRef.current.material.opacity = 0.3 + pulse * 0.2;
+      const material = glowRef.current.material;
+      if (material && !Array.isArray(material) && 'emissiveIntensity' in material) {
+        (material as any).emissiveIntensity = 0.3 + pulse * 0.3;
+      }
+      if (material && !Array.isArray(material) && 'opacity' in material) {
+        (material as any).opacity = 0.3 + pulse * 0.2;
+      }
     }
   });
 
@@ -135,7 +140,7 @@ function AnimatedConnectionLine({ startPos, endPos, isVisible }: {
   isVisible: boolean;
 }) {
   const [lineProgress, setLineProgress] = useState(0);
-  const lineRef = useRef<any>();
+  const lineRef = useRef<any>(null);
 
   useFrame(() => {
     if (isVisible && lineProgress < 1) {
@@ -178,7 +183,7 @@ function AnimatedConnectionLine({ startPos, endPos, isVisible }: {
 // Main 3D Scene Component
 function Scene({
   modelUrl,
-  annotations,
+  annotations: _annotations,
   onObjectSelect,
   selectedObject,
   selectedAnnotation,
@@ -191,7 +196,7 @@ function Scene({
   selectedAnnotation: Annotation | null;
   clickPosition: THREE.Vector3 | null;
 }) {
-  const gltf = useLoader(getGLTFLoader, modelUrl);
+  const gltf = useLoader(GLTFLoader, modelUrl);
   const { camera } = useThree();
   const [meshes, setMeshes] = useState<THREE.Object3D[]>([]);
 
@@ -199,7 +204,7 @@ function Scene({
     // Extract all meshes from the model
     const extractedMeshes: THREE.Object3D[] = [];
 
-    gltf.scene.traverse((child) => {
+    gltf.scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         // Set a name if it doesn't have one
         if (!child.name) {
@@ -316,7 +321,7 @@ export default function ModelEditor({
   const [selectedObject, setSelectedObject] = useState<THREE.Object3D | null>(null);
   const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
   const [clickPosition, setClickPosition] = useState<THREE.Vector3 | null>(null);
-  const [showPanel, setShowPanel] = useState(false);
+  const [_showPanel, _setShowPanel] = useState(false);
   const [screenPosition, setScreenPosition] = useState<{ x: number; y: number } | null>(null);
   const [showHUD, setShowHUD] = useState(false);
 
@@ -345,17 +350,19 @@ export default function ModelEditor({
         };
         setSelectedAnnotation(newAnnotation);
       }
-      setShowPanel(true);
+      _setShowPanel(true);
       setShowHUD(true);
     } else {
-      setShowPanel(false);
+      _setShowPanel(false);
       setSelectedAnnotation(null);
       setShowHUD(false);
       setScreenPosition(null);
     }
   }, [annotations, modelId]);
 
-  const handleAnnotationUpdate = useCallback((updatedAnnotation: Annotation) => {
+  // @ts-expect-error - Unused but kept for reference
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleAnnotationUpdate = useCallback((updatedAnnotation: Annotation) => {
     const existingIndex = annotations.findIndex(a =>
       a.id === updatedAnnotation.id || a.object_name === updatedAnnotation.object_name
     );
@@ -378,14 +385,14 @@ export default function ModelEditor({
     );
     onAnnotationsChange(newAnnotations);
     setSelectedAnnotation(null);
-    setShowPanel(false);
+    _setShowPanel(false);
   }, [annotations, onAnnotationsChange]);
 
   const handleKeyPress = useCallback((event: KeyboardEvent) => {
     if (event.key === 'Escape') {
       setSelectedObject(null);
       setSelectedAnnotation(null);
-      setShowPanel(false);
+      _setShowPanel(false);
     } else if (event.key === 'Delete' && selectedAnnotation) {
       handleAnnotationDelete(selectedAnnotation);
     }
@@ -439,7 +446,7 @@ export default function ModelEditor({
               setSelectedAnnotation(null);
               setSelectedObject(null);
               setClickPosition(null);
-              setShowPanel(false);
+              _setShowPanel(false);
             }}
             isVisible={showHUD}
           />,
@@ -448,19 +455,19 @@ export default function ModelEditor({
       )}
 
       {/* Keep the traditional annotation panel hidden but available for editing */}
-      {showPanel && selectedAnnotation && false && (
+      {/* {showPanel && selectedAnnotation && false && (
         <AnnotationPanel
           annotation={selectedAnnotation}
           onUpdate={handleAnnotationUpdate}
           onDelete={handleAnnotationDelete}
           onClose={() => {
-            setShowPanel(false);
+            _setShowPanel(false);
             setSelectedAnnotation(null);
             setSelectedObject(null);
             setClickPosition(null);
           }}
         />
-      )}
+      )} */}
 
       {/* Updated Instructions */}
       <div className="absolute top-4 left-4 bg-gray-900/90 backdrop-blur-md p-4 rounded-lg shadow-lg max-w-sm border border-blue-500/30"
@@ -504,7 +511,7 @@ export default function ModelEditor({
                 className="flex justify-between items-center hover:bg-gray-100 p-1 rounded cursor-pointer"
                 onClick={() => {
                   setSelectedAnnotation(ann);
-                  setShowPanel(true);
+                  _setShowPanel(true);
                 }}
               >
                 <span className="font-medium">{ann.object_name}</span>

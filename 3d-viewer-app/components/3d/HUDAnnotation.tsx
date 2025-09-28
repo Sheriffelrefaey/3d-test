@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState, useMemo } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Line } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
@@ -14,41 +14,9 @@ interface HUDAnnotationProps {
   isVisible: boolean;
 }
 
-// Enhanced Typewriter with high-quality rendering
-function TypewriterText({ text }: { text: string }) {
-  const [displayText, setDisplayText] = useState('');
-
-  useEffect(() => {
-    setDisplayText('');
-    let index = 0;
-    const interval = setInterval(() => {
-      if (index <= text.length) {
-        setDisplayText(text.slice(0, index));
-        index++;
-      } else {
-        clearInterval(interval);
-      }
-    }, 12); // Smoother at 12ms per character
-
-    return () => clearInterval(interval);
-  }, [text]);
-
-  return (
-    <span style={{
-      textRendering: 'optimizeLegibility',
-      WebkitFontSmoothing: 'antialiased',
-      MozOsxFontSmoothing: 'grayscale'
-    }}>
-      {displayText}
-      {displayText.length < text.length && (
-        <span className="opacity-50 animate-pulse">|</span>
-      )}
-    </span>
-  );
-}
 
 // Enhanced Futuristic White HUD Component
-export function HUDAnnotationCard({ annotation, screenPosition, onClose, isVisible }: {
+export function HUDAnnotationCard({ annotation, screenPosition: _screenPosition, onClose: _onClose, isVisible }: {
   annotation: Annotation | null;
   screenPosition: { x: number; y: number } | null;
   onClose: () => void;
@@ -73,7 +41,7 @@ export function HUDAnnotationCard({ annotation, screenPosition, onClose, isVisib
         const title = annotation.title || annotation.object_name || '';
         if (!title && !annotation.description) {
           // No content to show - skip animation
-          return;
+          return () => {};
         }
         let titleIndex = 0;
         const titleInterval = setInterval(() => {
@@ -105,6 +73,7 @@ export function HUDAnnotationCard({ annotation, screenPosition, onClose, isVisib
 
       return () => clearTimeout(textTimer);
     }
+    return () => {};
   }, [isVisible, annotation?.id]); // Trigger on annotation ID change
 
   if (!annotation || !isVisible) return null;
@@ -423,8 +392,13 @@ export function ObjectGlowEffect({ mesh, isActive }: { mesh: THREE.Mesh | null; 
     if (glowRef.current && isActive) {
       // Smoother pulsing glow effect
       const pulse = Math.sin(clock.getElapsedTime() * 2) * 0.5 + 0.5;
-      glowRef.current.material.emissiveIntensity = 0.3 + pulse * 0.3;
-      glowRef.current.material.opacity = 0.3 + pulse * 0.2;
+      const material = glowRef.current.material;
+      if (material && !Array.isArray(material) && 'emissiveIntensity' in material) {
+        (material as any).emissiveIntensity = 0.3 + pulse * 0.3;
+      }
+      if (material && !Array.isArray(material) && 'opacity' in material) {
+        (material as any).opacity = 0.3 + pulse * 0.2;
+      }
     }
   });
 
@@ -507,9 +481,9 @@ export function ConnectionLine({ startPos, endPos, isVisible }: {
 }
 
 // Main HUD Annotation System
-export default function HUDAnnotation({ annotation, worldPosition, onClose, isVisible }: HUDAnnotationProps) {
+export default function HUDAnnotation({ annotation: _annotation, worldPosition, onClose: _onClose, isVisible }: HUDAnnotationProps) {
   const { camera, gl } = useThree();
-  const [screenPosition, setScreenPosition] = useState<{ x: number; y: number } | null>(null);
+  const [_screenPosition, setScreenPosition] = useState<{ x: number; y: number } | null>(null);
 
   useFrame(() => {
     if (worldPosition && isVisible) {

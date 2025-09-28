@@ -2,7 +2,6 @@
 
 import { use, useEffect, useState, useCallback } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { supabase } from '@/lib/supabase/client';
 import type { Model, Annotation } from '@/types';
@@ -28,8 +27,7 @@ export default function EditModelPage({ params }: EditPageProps) {
   const [model, setModel] = useState<Model | null>(null);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const router = useRouter();
+  const [, setSaving] = useState(false);
 
   const fetchModelData = useCallback(async () => {
     try {
@@ -77,7 +75,7 @@ export default function EditModelPage({ params }: EditPageProps) {
 
   const handleSaveAnnotations = async (updatedAnnotations: Annotation[]) => {
     setSaving(true);
-    console.log('Saving annotations:', updatedAnnotations);
+    console.warn('Saving annotations:', updatedAnnotations);
 
     try {
       // First, delete ALL existing annotations for this model
@@ -114,7 +112,7 @@ export default function EditModelPage({ params }: EditPageProps) {
             menu_name: ann.menu_name || null // Custom menu name
           }));
 
-          console.log('Inserting annotations:', annotationsToInsert);
+          console.warn('Inserting annotations:', annotationsToInsert);
 
           const { data: insertData, error: insertError } = await supabase
             .from('annotations')
@@ -128,12 +126,12 @@ export default function EditModelPage({ params }: EditPageProps) {
             throw new Error(insertError.message || 'Failed to insert annotations');
           }
 
-          console.log('Inserted annotations:', insertData);
+          console.warn('Inserted annotations:', insertData);
         }
       }
 
       // Success feedback
-      console.log('Annotations saved successfully!');
+      console.warn('Annotations saved successfully!');
       toast.success('Annotations saved successfully!', {
         position: 'bottom-left',
         duration: 3000,
@@ -154,7 +152,7 @@ export default function EditModelPage({ params }: EditPageProps) {
           duration: 4000,
         });
       } else if (typeof error === 'object' && error !== null && 'message' in error) {
-        toast.error(`Failed to save annotations: ${(error as any).message}`, {
+        toast.error(`Failed to save annotations: ${(error as { message: string }).message}`, {
           position: 'bottom-left',
           duration: 4000,
         });

@@ -4,8 +4,7 @@ import React, { useEffect, useRef, useState, Suspense, useCallback } from 'react
 import { Canvas, useThree, useLoader } from '@react-three/fiber';
 import { OrbitControls, Environment, Grid, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { getGLTFLoader } from '@/lib/three/loaders';
-import { materialToThreeJS } from '@/lib/materials/presets';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { autoGenerateUVs } from '@/lib/three/uvGenerator';
 import type { Annotation } from '@/types';
 import {
@@ -43,15 +42,15 @@ function ViewerScene({
   resetViewRef: React.MutableRefObject<(() => void) | null>;
   onControlsReady: (controls: any) => void;
 }) {
-  const gltf = useLoader(getGLTFLoader, modelUrl);
+  const gltf = useLoader(GLTFLoader, modelUrl);
   const { camera, scene } = useThree();
   const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
   const [materials, setMaterials] = useState<Map<string, any>>(new Map());
   const [transforms, setTransforms] = useState<Map<string, any>>(new Map());
   const [environment, setEnvironment] = useState<any>(null);
-  const controlsRef = useRef<any>();
-  const initialCameraPosition = useRef<THREE.Vector3>();
-  const initialCameraTarget = useRef<THREE.Vector3>();
+  const controlsRef = useRef<any>(null);
+  const initialCameraPosition = useRef<THREE.Vector3>(new THREE.Vector3());
+  const initialCameraTarget = useRef<THREE.Vector3>(new THREE.Vector3());
 
   // Load saved settings
   useEffect(() => {
@@ -86,7 +85,7 @@ function ViewerScene({
     if (!gltf || !gltf.scene) return;
 
     const extractedMeshes: THREE.Mesh[] = [];
-    gltf.scene.traverse((child) => {
+    gltf.scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         extractedMeshes.push(child);
         child.castShadow = true;
@@ -153,19 +152,19 @@ function ViewerScene({
       if (material) {
         // Check if mesh has UV coordinates - required for textures
         const geometry = mesh.geometry;
-        let hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+        let hasUVs = geometry.attributes['uv'] && geometry.attributes['uv'].count > 0;
 
         // If no UVs exist and we need to apply a texture, generate them
         if (!hasUVs && material.texture_url) {
-          console.log(`No UV coordinates found for "${mesh.name}". Generating UVs...`);
+          console.warn(`No UV coordinates found for "${mesh.name}". Generating UVs...`);
           autoGenerateUVs(geometry, mesh.name);
-          hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+          hasUVs = geometry.attributes['uv'] && geometry.attributes['uv'].count > 0;
         }
 
         // Create base material parameters
         // If there's a texture, set color to white so texture shows properly
         const hasTexture = material.texture_url && hasUVs;
-        const baseParams = {
+        const baseParams: any = {
           color: hasTexture
             ? new THREE.Color(1, 1, 1) // White color to show texture without tinting
             : new THREE.Color(material.color.r / 255, material.color.g / 255, material.color.b / 255),
@@ -209,13 +208,13 @@ function ViewerScene({
 
         // If there's a texture URL and the mesh has UVs, load and apply texture
         if (material.texture_url && hasUVs) {
-          console.log(`Loading texture for "${mesh.name}" from: ${material.texture_url}`);
+          console.warn(`Loading texture for "${mesh.name}" from: ${material.texture_url}`);
 
           const textureLoader = new THREE.TextureLoader();
           textureLoader.load(
             material.texture_url,
             (texture) => {
-              console.log(`Texture loaded successfully for "${mesh.name}"`);
+              console.warn(`Texture loaded successfully for "${mesh.name}"`);
 
               // Apply texture settings if they exist
               if (material.texture_settings) {
@@ -253,7 +252,7 @@ function ViewerScene({
                 // Ensure the material color doesn't tint the texture
                 mesh.material.color = new THREE.Color(1, 1, 1);
 
-                console.log(`Texture applied to "${mesh.name}"`, {
+                console.warn(`Texture applied to "${mesh.name}"`, {
                   hasMap: !!mesh.material.map,
                   textureUrl: material.texture_url,
                   material: mesh.material
@@ -330,12 +329,13 @@ function ViewerScene({
         <>
           <ambientLight
             intensity={environment.lighting?.ambient?.intensity || 0.8}
-            color={environment.lighting?.ambient?.color ?
-              new THREE.Color(
+            {...(environment.lighting?.ambient?.color ? {
+              color: new THREE.Color(
                 environment.lighting.ambient.color.r / 255,
                 environment.lighting.ambient.color.g / 255,
                 environment.lighting.ambient.color.b / 255
-              ) : undefined}
+              )
+            } : {})}
           />
           {environment.lighting?.directional?.map((light: any, index: number) => (
             <directionalLight

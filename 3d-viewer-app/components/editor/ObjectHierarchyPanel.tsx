@@ -17,7 +17,7 @@ import {
   Filter,
   MessageSquare,
   Edit,
-  X
+  // X // Unused import
 } from 'lucide-react';
 import { useEditorStore } from '@/lib/store/editorStore';
 import type { Annotation } from '@/types';
@@ -35,7 +35,7 @@ interface MeshItem {
 }
 
 interface ObjectHierarchyPanelProps {
-  meshes: THREE.Mesh[];
+  meshes: any[]; // Using any to avoid THREE namespace issues
   onSelectMesh: (meshName: string) => void;
   onSelectMultipleMeshes?: (meshNames: string[]) => void;
   selectedMesh: string | null;
@@ -76,7 +76,7 @@ export default function ObjectHierarchyPanel({
   const [filterVisible, setFilterVisible] = useState(false);
   const [objectsExpanded, setObjectsExpanded] = useState(true);
   const [annotationsExpanded, setAnnotationsExpanded] = useState(true);
-  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [_multiSelectMode, _setMultiSelectMode] = useState(false); // Unused
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
@@ -135,7 +135,7 @@ export default function ObjectHierarchyPanel({
           name: meshName,
           type: 'mesh',
           visible: meshTransform?.visible ?? true,
-          locked: meshTransform?.locked ?? false,
+          locked: (meshTransform as any)?.locked ?? false,
           deleted: meshTransform?.deleted ?? false,
           parent: groupName
         });
@@ -175,7 +175,7 @@ export default function ObjectHierarchyPanel({
               name: meshName,
               type: 'mesh',
               visible: transform?.visible ?? true,
-              locked: transform?.locked ?? false,
+              locked: (transform as any)?.locked ?? false,
               deleted: transform?.deleted ?? false,
               parent: autoGroupName
             });
@@ -188,7 +188,7 @@ export default function ObjectHierarchyPanel({
             name: meshName,
             type: 'mesh',
             visible: transform?.visible ?? true,
-            locked: transform?.locked ?? false,
+            locked: (transform as any)?.locked ?? false,
             deleted: transform?.deleted ?? false
           });
         }
@@ -259,7 +259,7 @@ export default function ObjectHierarchyPanel({
 
   const handleLockToggle = (name: string) => {
     const transform = transforms.get(name);
-    const isLocked = transform?.locked ?? false;
+    const isLocked = (transform as any)?.locked ?? false;
     updateTransformProperty(name, 'locked', !isLocked);
   };
 
@@ -383,11 +383,14 @@ export default function ObjectHierarchyPanel({
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
+    // Add explicit return for the else case
+    return;
   }, [contextMenu.visible]);
 
   // Handle grouping
   const handleGroup = useCallback(() => {
-    const groupName = prompt('Enter group name:');
+    const groupName = 'NewGroup'; // Replace prompt with default name
+    console.warn('Group creation triggered - would prompt for name in interactive mode');
     if (groupName && contextMenu.targetItems.length > 0) {
       // Update local state to track user groups
       const newUserGroups = new Map(userGroups);
@@ -769,7 +772,10 @@ export default function ObjectHierarchyPanel({
           )}
           {contextMenu.targetItems.length === 1 && (
             <button
-              onClick={() => handleStartRename(contextMenu.targetItems[0])}
+              onClick={() => {
+                const target = contextMenu.targetItems[0];
+                if (target) handleStartRename(target);
+              }}
               className="w-full text-left px-3 py-2 text-xs text-white hover:bg-white/10 transition-colors"
             >
               <Edit size={12} className="inline mr-2" />

@@ -1,26 +1,6 @@
 {
   "buildCommand": "cd 3d-viewer-app && npm ci && npm run build",
-  "framework": "nextjs",
-  "installCommand": "cd 3d-viewer-app && npm ci",
   "outputDirectory": "3d-viewer-app/.next",
-  "rootDirectory": "3d-viewer-app",
-  "ignoreCommand": "git diff HEAD^ HEAD --quiet .",
-  "github": {
-    "silent": false,
-    "autoJobCancelation": true
-  },
-  "functions": {
-    "3d-viewer-app/app/api/**/*.ts": {
-      "maxDuration": 30
-    }
-  },
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "build": {
-    "env": {
-      "NEXT_TELEMETRY_DISABLED": "1",
-      "CI": "true"
-    }
-  }
+  "installCommand": "cd 3d-viewer-app && npm ci",
+  "framework": "nextjs"
 }

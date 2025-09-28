@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Upload, Eye, Settings, Sparkles, Layers, Smartphone } from 'lucide-react';
 
+export const dynamic = 'force-dynamic';
+
 export default function HomePage() {
   return (
     <div className="min-h-screen relative overflow-hidden">

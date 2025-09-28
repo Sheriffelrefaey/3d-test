@@ -8,8 +8,8 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent,
 } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
 import {
   arrayMove,
   SortableContext,
@@ -19,7 +19,7 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Eye, EyeOff, Edit2, Check, X } from 'lucide-react';
-import { Annotation } from '@/types';
+import type { Annotation } from '@/types';
 
 interface SortableAnnotationItemProps {
   annotation: Annotation;

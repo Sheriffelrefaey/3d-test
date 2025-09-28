@@ -48,7 +48,7 @@ export default function ModelViewer({ modelUrl, children }: ModelViewerProps) {
             minDistance={0.5}
             maxDistance={100}
             maxPolarAngle={Math.PI * 0.85}
-            target={[0, 0.5, 0]} {/* Lower target for better centering */}
+            target={[0, 0.5, 0] as [number, number, number]} // Lower target for better centering
           />
 
           {/* Enhanced lighting setup for better visibility */}

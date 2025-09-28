@@ -3,23 +3,17 @@
 import React, { useState } from 'react';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import * as Slider from '@radix-ui/react-slider';
-import * as Select from '@radix-ui/react-select';
 import {
   ChevronDown,
   ChevronRight,
   Cloud,
   Sun,
   Grid3x3,
-  Palette,
-  Eye,
-  EyeOff,
-  Settings,
   Image,
-  Sparkles
 } from 'lucide-react';
 import ColorPicker from './ColorPicker';
 import GradientEditor from './GradientEditor';
-import type { ModelEnvironment, Color, Fog, Grid as GridType, Background, Lighting } from '@/types';
+import type { ModelEnvironment, Color, Fog, Grid as GridType, Background } from '@/types';
 
 interface EnvironmentPanelProps {
   environment: ModelEnvironment;
@@ -48,14 +42,16 @@ export default function EnvironmentPanel({ environment, onChange }: EnvironmentP
       background: {
         ...environment.background,
         type,
-        gradient: type === 'gradient' ? {
-          type: 'linear',
-          angle: 90,
-          stops: [
-            { color: { r: 245, g: 245, b: 245, a: 1 }, position: 0 },
-            { color: { r: 200, g: 200, b: 200, a: 1 }, position: 1 }
-          ]
-        } : undefined
+        ...(type === 'gradient' ? {
+          gradient: {
+            type: 'linear',
+            angle: 90,
+            stops: [
+              { color: { r: 245, g: 245, b: 245, a: 1 }, position: 0 },
+              { color: { r: 200, g: 200, b: 200, a: 1 }, position: 1 }
+            ]
+          }
+        } : {})
       }
     });
   };
@@ -137,7 +133,7 @@ export default function EnvironmentPanel({ environment, onChange }: EnvironmentP
     newDirectional[index] = {
       ...newDirectional[index],
       [property]: value
-    };
+    } as any;
     onChange({
       ...environment,
       lighting: {
@@ -157,7 +153,7 @@ export default function EnvironmentPanel({ environment, onChange }: EnvironmentP
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Image size={16} className="text-blue-500" />
+              <Image size={16} className="text-blue-500" aria-label="Background settings" />
               <span className="font-medium text-sm">Background</span>
             </div>
             {expandedSections.has('background') ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -262,8 +258,8 @@ export default function EnvironmentPanel({ environment, onChange }: EnvironmentP
               </div>
               <Slider.Root
                 className="relative flex items-center select-none touch-none w-full h-5"
-                value={[environment.lighting.ambient.intensity]}
-                onValueChange={([v]) => handleAmbientLightChange('intensity', v)}
+                value={[environment.lighting.ambient.intensity || 0.8]}
+                onValueChange={([v]) => handleAmbientLightChange('intensity', v || 0.8)}
                 max={5}
                 min={0}
                 step={0.1}
@@ -371,8 +367,8 @@ export default function EnvironmentPanel({ environment, onChange }: EnvironmentP
                   </div>
                   <Slider.Root
                     className="relative flex items-center select-none touch-none w-full h-5"
-                    value={[environment.fog.near]}
-                    onValueChange={([v]) => handleFogPropertyChange('near', v)}
+                    value={[environment.fog.near || 1]}
+                    onValueChange={([v]) => handleFogPropertyChange('near', v || 1)}
                     max={100}
                     min={0}
                     step={1}
@@ -392,8 +388,8 @@ export default function EnvironmentPanel({ environment, onChange }: EnvironmentP
                   </div>
                   <Slider.Root
                     className="relative flex items-center select-none touch-none w-full h-5"
-                    value={[environment.fog.far]}
-                    onValueChange={([v]) => handleFogPropertyChange('far', v)}
+                    value={[environment.fog.far || 100]}
+                    onValueChange={([v]) => handleFogPropertyChange('far', v || 100)}
                     max={200}
                     min={1}
                     step={1}
@@ -413,8 +409,8 @@ export default function EnvironmentPanel({ environment, onChange }: EnvironmentP
                   </div>
                   <Slider.Root
                     className="relative flex items-center select-none touch-none w-full h-5"
-                    value={[environment.fog.density]}
-                    onValueChange={([v]) => handleFogPropertyChange('density', v)}
+                    value={[environment.fog.density || 0.01]}
+                    onValueChange={([v]) => handleFogPropertyChange('density', v || 0.01)}
                     max={0.1}
                     min={0}
                     step={0.001}
@@ -477,8 +473,8 @@ export default function EnvironmentPanel({ environment, onChange }: EnvironmentP
                   </div>
                   <Slider.Root
                     className="relative flex items-center select-none touch-none w-full h-5"
-                    value={[environment.grid.size]}
-                    onValueChange={([v]) => handleGridPropertyChange('size', v)}
+                    value={[environment.grid.size || 50]}
+                    onValueChange={([v]) => handleGridPropertyChange('size', v || 50)}
                     max={100}
                     min={10}
                     step={5}
@@ -498,8 +494,8 @@ export default function EnvironmentPanel({ environment, onChange }: EnvironmentP
                   </div>
                   <Slider.Root
                     className="relative flex items-center select-none touch-none w-full h-5"
-                    value={[environment.grid.divisions]}
-                    onValueChange={([v]) => handleGridPropertyChange('divisions', v)}
+                    value={[environment.grid.divisions || 20]}
+                    onValueChange={([v]) => handleGridPropertyChange('divisions', v || 20)}
                     max={50}
                     min={5}
                     step={5}
@@ -521,8 +517,8 @@ export default function EnvironmentPanel({ environment, onChange }: EnvironmentP
                   </div>
                   <Slider.Root
                     className="relative flex items-center select-none touch-none w-full h-5"
-                    value={[environment.grid.opacity]}
-                    onValueChange={([v]) => handleGridPropertyChange('opacity', v)}
+                    value={[environment.grid.opacity || 0.5]}
+                    onValueChange={([v]) => handleGridPropertyChange('opacity', v || 0.5)}
                     max={1}
                     min={0}
                     step={0.05}

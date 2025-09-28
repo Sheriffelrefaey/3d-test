@@ -3,7 +3,6 @@ import type { MaterialPreset, ObjectMaterial, Color } from '@/types';
 // Default color values
 const white: Color = { r: 255, g: 255, b: 255, a: 1 };
 const black: Color = { r: 0, g: 0, b: 0, a: 1 };
-const gray: Color = { r: 128, g: 128, b: 128, a: 1 };
 
 // Material preset definitions
 export const materialPresets: Record<MaterialPreset, Partial<ObjectMaterial>> = {

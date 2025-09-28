@@ -16,7 +16,7 @@ export default function SimpleCameraController({
   targetObject,
   onAnimationComplete
 }: SimpleCameraControllerProps) {
-  const { camera, gl } = useThree();
+  const { camera } = useThree();
   const controlsRef = useRef<any>(null);
 
   const animationRef = useRef<{
@@ -119,7 +119,6 @@ export default function SimpleCameraController({
   return (
     <OrbitControls
       ref={controlsRef}
-      args={[camera, gl.domElement]}
       enableDamping={true}
       dampingFactor={0.25}
       rotateSpeed={0.7}

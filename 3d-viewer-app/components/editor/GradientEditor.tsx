@@ -4,7 +4,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Plus, Trash2, RotateCcw } from 'lucide-react';
 import ColorPicker from './ColorPicker';
 import * as Slider from '@radix-ui/react-slider';
-import type { Gradient, GradientStop, Color } from '@/types';
+import type { Gradient, Color } from '@/types';
 
 interface GradientEditorProps {
   gradient: Gradient;
@@ -68,11 +68,22 @@ export default function GradientEditor({ gradient, onChange }: GradientEditorPro
     let afterStop = sortedStops[sortedStops.length - 1];
 
     for (let i = 0; i < sortedStops.length - 1; i++) {
-      if (sortedStops[i].position <= newPosition && sortedStops[i + 1].position >= newPosition) {
-        beforeStop = sortedStops[i];
-        afterStop = sortedStops[i + 1];
+      const currentStop = sortedStops[i];
+      const nextStop = sortedStops[i + 1];
+      if (currentStop && nextStop && currentStop.position <= newPosition && nextStop.position >= newPosition) {
+        beforeStop = currentStop;
+        afterStop = nextStop;
         break;
       }
+    }
+
+    if (!beforeStop || !afterStop) {
+      // Fallback to default color
+      const defaultColor: Color = { r: 128, g: 128, b: 128, a: 1 };
+      const newStop = { color: defaultColor, position: newPosition };
+      newStops.push(newStop);
+      onChange({ ...gradient, stops: newStops });
+      return;
     }
 
     const ratio = (newPosition - beforeStop.position) / (afterStop.position - beforeStop.position);
@@ -91,7 +102,7 @@ export default function GradientEditor({ gradient, onChange }: GradientEditorPro
   // Remove a color stop
   const removeColorStop = useCallback((index: number) => {
     if (gradient.stops.length <= 2) {
-      alert('A gradient must have at least 2 color stops');
+      console.warn('A gradient must have at least 2 color stops');
       return;
     }
 
@@ -103,15 +114,21 @@ export default function GradientEditor({ gradient, onChange }: GradientEditorPro
   // Update stop color
   const updateStopColor = useCallback((index: number, color: Color) => {
     const newStops = [...gradient.stops];
-    newStops[index] = { ...newStops[index], color };
-    onChange({ ...gradient, stops: newStops });
+    const currentStop = newStops[index];
+    if (currentStop) {
+      newStops[index] = { ...currentStop, color };
+      onChange({ ...gradient, stops: newStops });
+    }
   }, [gradient, onChange]);
 
   // Update stop position
   const updateStopPosition = useCallback((index: number, position: number) => {
     const newStops = [...gradient.stops];
-    newStops[index] = { ...newStops[index], position };
-    onChange({ ...gradient, stops: newStops });
+    const currentStop = newStops[index];
+    if (currentStop) {
+      newStops[index] = { ...currentStop, position };
+      onChange({ ...gradient, stops: newStops });
+    }
   }, [gradient, onChange]);
 
   // Preset gradients
@@ -204,7 +221,7 @@ export default function GradientEditor({ gradient, onChange }: GradientEditorPro
             <Slider.Root
               className="relative flex items-center select-none touch-none flex-1 h-5"
               value={[gradient.angle || 90]}
-              onValueChange={([v]) => handleAngleChange(v)}
+              onValueChange={([v]) => handleAngleChange(v ?? 90)}
               max={360}
               min={0}
               step={1}
@@ -314,13 +331,13 @@ export default function GradientEditor({ gradient, onChange }: GradientEditorPro
             <div className="flex justify-between items-center">
               <label className="text-sm font-medium text-gray-700">Position</label>
               <span className="text-sm font-mono text-gray-600">
-                {Math.round(currentStop.position * 100)}%
+                {Math.round((currentStop?.position ?? 0) * 100)}%
               </span>
             </div>
             <Slider.Root
               className="relative flex items-center select-none touch-none w-full h-5"
-              value={[currentStop.position]}
-              onValueChange={([v]) => updateStopPosition(selectedStop, v)}
+              value={[currentStop?.position ?? 0]}
+              onValueChange={([v]) => updateStopPosition(selectedStop, v ?? 0)}
               max={1}
               min={0}
               step={0.01}

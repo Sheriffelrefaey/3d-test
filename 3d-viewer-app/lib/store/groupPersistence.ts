@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env['NEXT_PUBLIC_SUPABASE_URL'] || '',
+  process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] || ''
 );
 
 export interface ObjectGroup {
@@ -41,7 +41,7 @@ export async function saveGroups(modelId: string, groups: Map<string, string[]>)
       }
     }
 
-    console.log('Groups saved successfully');
+    console.warn('Groups saved successfully');
     return true;
   } catch (error) {
     console.error('Error saving groups:', error);
@@ -69,7 +69,7 @@ export async function loadGroups(modelId: string): Promise<Map<string, string[]>
       });
     }
 
-    console.log('Groups loaded successfully:', groupsMap.size);
+    console.warn('Groups loaded successfully:', groupsMap.size);
     return groupsMap;
   } catch (error) {
     console.error('Error loading groups:', error);
@@ -95,7 +95,7 @@ export async function updateGroup(modelId: string, groupName: string, members: s
       throw error;
     }
 
-    console.log('Group updated successfully:', groupName);
+    console.warn('Group updated successfully:', groupName);
     return true;
   } catch (error) {
     console.error('Error updating group:', error);
@@ -117,7 +117,7 @@ export async function deleteGroup(modelId: string, groupName: string) {
       throw error;
     }
 
-    console.log('Group deleted successfully:', groupName);
+    console.warn('Group deleted successfully:', groupName);
     return true;
   } catch (error) {
     console.error('Error deleting group:', error);

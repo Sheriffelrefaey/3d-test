@@ -103,7 +103,7 @@ export default function InfiniteGroundPlane({
 
           setTexture(configuredTexture);
           setIsLoadingTexture(false);
-          console.log('Ground texture loaded:', groundMaterial.texture_url);
+          console.warn('Ground texture loaded:', groundMaterial.texture_url);
         },
         undefined,
         (error) => {

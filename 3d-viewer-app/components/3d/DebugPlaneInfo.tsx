@@ -5,12 +5,32 @@ import * as THREE from 'three';
 
 // This component should be used OUTSIDE of Canvas
 export default function DebugPlaneInfo({ scene }: { scene?: THREE.Scene }) {
-  const [planeInfo, setPlaneInfo] = useState<any[]>([]);
+  const [planeInfo, setPlaneInfo] = useState<{
+    name: string;
+    position: { x: number; y: number; z: number };
+    size: { x: number; y: number; z: number };
+    visible: boolean;
+    isFlat: boolean;
+    hasPlaneInName: boolean;
+    isBelowOrigin: boolean;
+    userData: { [key: string]: unknown };
+    uuid: string;
+  }[]>([]);
 
   useEffect(() => {
     if (!scene) return;
 
-    const planes: any[] = [];
+    const planes: {
+      name: string;
+      position: { x: number; y: number; z: number };
+      size: { x: number; y: number; z: number };
+      visible: boolean;
+      isFlat: boolean;
+      hasPlaneInName: boolean;
+      isBelowOrigin: boolean;
+      userData: { [key: string]: unknown };
+      uuid: string;
+    }[] = [];
     let lowestMesh: { name: string; y: number; } | null = null;
 
     scene.traverse((child) => {
@@ -65,18 +85,18 @@ export default function DebugPlaneInfo({ scene }: { scene?: THREE.Scene }) {
 
     planes.sort((a, b) => a.position.y - b.position.y);
 
-    console.log('=== PLANE DEBUG INFO ===');
-    console.log('Found planes:', planes);
-    console.log('Lowest mesh:', lowestMesh);
-    console.log('========================');
+    console.warn('=== PLANE DEBUG INFO ===');
+    console.warn('Found planes:', planes);
+    console.warn('Lowest mesh:', lowestMesh);
+    console.warn('========================');
 
     setPlaneInfo(planes);
 
     // Return the lowest plane name to parent if needed
-    if (planes.length > 0) {
-      console.log('Lowest plane-like object:', planes[0].name);
+    if (planes.length > 0 && planes[0]) {
+      console.warn('Lowest plane-like object:', planes[0].name);
       // Make it selectable by adding to window for testing
-      (window as any).__debugLowestPlane = planes[0].name;
+      (window as { __debugLowestPlane?: string }).__debugLowestPlane = planes[0].name;
     }
   }, [scene]);
 

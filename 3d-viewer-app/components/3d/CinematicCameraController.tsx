@@ -1,17 +1,19 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { OrbitControls } from '@react-three/drei';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import type { Annotation } from '@/types';
 
 interface CinematicCameraControllerProps {
   targetPosition: THREE.Vector3 | null;
-  targetObject: any | null;
+  targetObject: THREE.Object3D | null;
   onAnimationComplete?: () => void;
   autoRotate?: boolean;
-  annotations?: any[];
-  onAnnotationFocus?: (annotation: any) => void;
+  annotations?: Annotation[];
+  onAnnotationFocus?: (annotation: Annotation) => void;
   onDroneModeStopped?: () => void;
 }
 
@@ -29,8 +31,8 @@ export default function CinematicCameraController({
   onAnnotationFocus,
   onDroneModeStopped
 }: CinematicCameraControllerProps) {
-  const { camera, gl } = useThree();
-  const controlsRef = useRef<any>(null);
+  const { camera } = useThree(); // gl removed as unused
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const patternIndex = useRef(0);
 
   // Drone mode state
@@ -120,7 +122,8 @@ export default function CinematicCameraController({
 
     if (targetObject instanceof THREE.Mesh && targetObject.geometry) {
       targetObject.geometry.computeBoundingBox();
-      const box = targetObject.geometry.boundingBox!.clone();
+      if (!targetObject.geometry.boundingBox) return;
+      const box = targetObject.geometry.boundingBox.clone();
       box.applyMatrix4(targetObject.matrixWorld);
       targetCenter = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
@@ -156,7 +159,7 @@ export default function CinematicCameraController({
     patternIndex.current++;
 
     // Calculate mid-point for creative path
-    const midPoint = calculateCreativePath(currentCameraPos, finalCameraPos, targetCenter, pattern);
+    const midPoint = calculateCreativePath(currentCameraPos, finalCameraPos, targetCenter, pattern || 'dolly');
 
     // Start animation with easing
     animationRef.current = {
@@ -167,8 +170,8 @@ export default function CinematicCameraController({
       endPos: finalCameraPos,
       startTarget: currentTarget,
       endTarget: targetCenter,
-      pattern: pattern,
-      midPoint: midPoint
+      pattern: pattern || 'dolly',
+      midPoint
     };
 
   }, [targetObject, targetPosition, camera]);
@@ -218,7 +221,7 @@ export default function CinematicCameraController({
 
             // Trigger HUD for current annotation
             const currentAnnotation = visibleAnnotations[droneState.currentAnnotationIndex];
-            if (onAnnotationFocus) {
+            if (onAnnotationFocus && currentAnnotation) {
               onAnnotationFocus(currentAnnotation);
             }
           }
@@ -232,6 +235,7 @@ export default function CinematicCameraController({
 
             // Trigger camera movement to next annotation
             const nextAnnotation = visibleAnnotations[droneState.currentAnnotationIndex];
+            if (!nextAnnotation) return;
             const targetPos = new THREE.Vector3(
               nextAnnotation.position_x || 0,
               nextAnnotation.position_y || 0,
@@ -256,10 +260,10 @@ export default function CinematicCameraController({
               duration: 4000, // Even slower movement (4 seconds)
               startPos: camera.position.clone(),
               endPos: newCameraPos,
-              startTarget: controlsRef.current.target.clone(),
+              startTarget: controlsRef.current?.target?.clone() || new THREE.Vector3(),
               endTarget: targetPos,
               pattern: 'dolly', // Simple dolly movement for drone mode
-              midPoint: undefined
+              // midPoint: undefined // Omit undefined optional property
             };
           }
         }
@@ -340,7 +344,6 @@ export default function CinematicCameraController({
   return (
     <OrbitControls
       ref={controlsRef}
-      args={[camera, gl.domElement]}
       enableDamping={true}
       dampingFactor={0.08} // Very smooth damping
       rotateSpeed={0.8}

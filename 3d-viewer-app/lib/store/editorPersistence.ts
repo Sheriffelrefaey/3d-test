@@ -5,10 +5,14 @@ import type { ObjectMaterial, ObjectTransform, ModelEnvironment } from '@/types'
 export async function saveMaterials(materials: ObjectMaterial[]) {
   if (materials.length === 0) return;
 
-  const modelId = materials[0].model_id;
+  const modelId = materials[0]?.model_id;
+  if (!modelId) {
+    console.error('No model_id found in materials');
+    throw new Error('No model_id found in materials');
+  }
 
-  console.log('Saving materials for model:', modelId);
-  console.log('Number of materials to save:', materials.length);
+  console.warn('Saving materials for model:', modelId);
+  console.warn('Number of materials to save:', materials.length);
 
   // Delete existing materials for this model
   const { error: deleteError } = await supabase
@@ -30,7 +34,7 @@ export async function saveMaterials(materials: ObjectMaterial[]) {
     const materialWithId = {
       ...material,
       id: material.id || crypto.randomUUID(),
-      material_type: material.material_type === 'preset' ? 'preset' : 'custom'
+      material_type: (material.material_type === 'preset' ? 'preset' : 'custom') as 'preset' | 'custom'
     };
     uniqueMaterials.set(material.object_name, materialWithId);
   });
@@ -38,7 +42,7 @@ export async function saveMaterials(materials: ObjectMaterial[]) {
   const materialsToInsert = Array.from(uniqueMaterials.values());
 
   if (materialsToInsert.length > 0) {
-    console.log('Inserting materials:', materialsToInsert);
+    console.warn('Inserting materials:', materialsToInsert);
 
     const { data: insertData, error: insertError } = await supabase
       .from('object_materials')
@@ -52,7 +56,7 @@ export async function saveMaterials(materials: ObjectMaterial[]) {
       throw insertError;
     }
 
-    console.log('Successfully inserted', insertData?.length, 'materials');
+    console.warn('Successfully inserted', insertData?.length, 'materials');
   }
 }
 
@@ -60,10 +64,14 @@ export async function saveMaterials(materials: ObjectMaterial[]) {
 export async function saveTransforms(transforms: ObjectTransform[]) {
   if (transforms.length === 0) return;
 
-  const modelId = transforms[0].model_id;
+  const modelId = transforms[0]?.model_id;
+  if (!modelId) {
+    console.error('No model_id found in transforms');
+    throw new Error('No model_id found in transforms');
+  }
 
-  console.log('Saving transforms for model:', modelId);
-  console.log('Number of transforms to save:', transforms.length);
+  console.warn('Saving transforms for model:', modelId);
+  console.warn('Number of transforms to save:', transforms.length);
 
   // First, delete all existing transforms for this model
   const { error: deleteError } = await supabase
@@ -89,7 +97,7 @@ export async function saveTransforms(transforms: ObjectTransform[]) {
     }
 
     // Ensure all required fields are present
-    const validTransform: any = {
+    const validTransform: ObjectTransform & { model_id: string } = {
       model_id: modelId,
       object_name: transform.object_name,
       visible: transform.visible !== undefined ? transform.visible : true,
@@ -106,7 +114,7 @@ export async function saveTransforms(transforms: ObjectTransform[]) {
   const transformsToInsert = Array.from(uniqueTransforms.values());
 
   if (transformsToInsert.length > 0) {
-    console.log('Inserting transforms:', transformsToInsert);
+    console.warn('Inserting transforms:', transformsToInsert);
 
     const { data: insertData, error: insertError } = await supabase
       .from('object_transforms')
@@ -120,7 +128,7 @@ export async function saveTransforms(transforms: ObjectTransform[]) {
       throw insertError;
     }
 
-    console.log('Successfully inserted', insertData?.length, 'transforms');
+    console.warn('Successfully inserted', insertData?.length, 'transforms');
   }
 }
 

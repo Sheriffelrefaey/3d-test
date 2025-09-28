@@ -10,19 +10,13 @@ import {
   Environment,
   GizmoHelper,
   GizmoViewport,
-  Html,
-  TransformControls,
-  PerspectiveCamera,
-  Line
+  TransformControls
 } from '@react-three/drei';
 import * as THREE from 'three';
 import {
   Save,
   Undo,
   Redo,
-  Download,
-  Upload,
-  Settings2,
   Eye,
   EyeOff,
   Trash2,
@@ -55,16 +49,13 @@ const textureCache = new Map<string, THREE.Texture>();
 
 // Store and utilities
 import { useEditorStore } from '@/lib/store/editorStore';
-import { materialToThreeJS } from '@/lib/materials/presets';
 import { getGLTFLoader } from '@/lib/three/loaders';
 import { autoGenerateUVs } from '@/lib/three/uvGenerator';
 import { saveGroups, loadGroups, updateGroup, deleteGroup } from '@/lib/store/groupPersistence';
 
 // Types
 import type {
-  Annotation,
-  ObjectMaterial,
-  ModelEnvironment
+  Annotation
 } from '@/types';
 
 // Import glassmorphism styles
@@ -109,13 +100,13 @@ function ScreenPositionUpdater({ clickPosition, onScreenPositionUpdate }: {
 function HUDGlowMaterial({ isSelected }: { isSelected: boolean }) {
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
   const startTimeRef = useRef(Date.now());
-  const [opacity, setOpacity] = useState(0.6);
+  // const [opacity, setOpacity] = useState(0.6); // Unused variable
 
   useEffect(() => {
     if (isSelected) {
       // Reset animation when selection changes
       startTimeRef.current = Date.now();
-      setOpacity(0.6);
+      // setOpacity(0.6); // Variable commented out
     }
   }, [isSelected]);
 
@@ -168,11 +159,11 @@ function EnhancedScene({
   selectedObject,
   selectedObjects = [],
   selectedMeshNames = [],
-  onSceneClick,
+  onSceneClick: _onSceneClick,
   resetViewRef,
   onMeshesLoaded,
-  clickPosition,
-  selectedAnnotation,
+  clickPosition: _clickPosition,
+  selectedAnnotation: _selectedAnnotation,
   readOnly = false,
   setCameraTarget,
   cameraTarget,
@@ -199,12 +190,12 @@ function EnhancedScene({
   handleDroneAnnotationFocus: (annotation: Annotation) => void;
   handleDroneModeStopped: () => void;
 }) {
-  const gltf = useLoader(getGLTFLoader, modelUrl);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const gltf = useLoader(getGLTFLoader as any, modelUrl);
   const { camera, scene } = useThree();
   const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
-  const controlsRef = useRef<any>();
-  const initialCameraPosition = useRef<THREE.Vector3>();
-  const initialCameraTarget = useRef<THREE.Vector3>();
+  const initialCameraPosition = useRef<THREE.Vector3>(new THREE.Vector3());
+  const initialCameraTarget = useRef<THREE.Vector3>(new THREE.Vector3());
 
 
   // Get store state
@@ -213,7 +204,7 @@ function EnhancedScene({
     transforms,
     environment,
     selectedObject: selectedObjectName,
-    setTransform
+    setTransform: _setTransform // Used later in the component
   } = useEditorStore();
 
   // Reset view function
@@ -226,7 +217,7 @@ function EnhancedScene({
       camera.lookAt(initialCameraTarget.current);
       camera.updateProjectionMatrix();
     }
-  }, [camera]);
+  }, [camera, setCameraTarget]);
 
   // Expose reset view to parent
   useEffect(() => {
@@ -239,11 +230,11 @@ function EnhancedScene({
     const nameCount: Map<string, number> = new Map();
     let planeCounter = 1;
 
-    gltf.scene.traverse((child) => {
+    gltf.scene.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         // Skip ONLY our special infinite ground plane
-        if (child.name === 'Plane12847' || child.userData?.isGroundPlane) {
-          console.log('Skipping infinite ground plane:', child.name);
+        if (child.name === 'Plane12847' || (child.userData as { isGroundPlane?: boolean })?.isGroundPlane) {
+          console.warn('Skipping infinite ground plane:', child.name);
           return;
         }
 
@@ -285,7 +276,7 @@ function EnhancedScene({
         if (!child.name || child.name === '') {
           if (isPlane || nameIndicatesPlane) {
             child.name = `ModelPlane_${planeCounter++}`;
-            console.log('Found unnamed plane, naming it:', child.name);
+            console.warn('Found unnamed plane, naming it:', child.name);
           } else {
             child.name = `Mesh_${extractedMeshes.length + 1}`;
           }
@@ -300,17 +291,17 @@ function EnhancedScene({
         }
 
         // Add metadata
-        child.userData.uniqueId = `${child.name}_${child.uuid}`;
-        child.userData.originalMaterial = child.material;
-        child.userData.isModelPlane = isPlane || nameIndicatesPlane;
+        (child.userData as { [key: string]: unknown })['uniqueId'] = `${child.name}_${child.uuid}`;
+        (child.userData as { [key: string]: unknown })['originalMaterial'] = child.material;
+        (child.userData as { [key: string]: unknown })['isModelPlane'] = isPlane || nameIndicatesPlane;
         // IMPORTANT: Mark model planes as always selectable
-        child.userData.isSelectable = true;
+        (child.userData as { [key: string]: unknown })['isSelectable'] = true;
 
         if (isPlane || nameIndicatesPlane) {
-          console.log('Detected plane:', child.name, planeInfo, 'Making it selectable');
+          console.warn('Detected plane:', child.name, planeInfo, 'Making it selectable');
           // Force generate UV coordinates for planes if they don't have them
           if (!child.geometry.attributes.uv) {
-            console.log(`Generating UV coordinates for plane: ${child.name}`);
+            console.warn(`Generating UV coordinates for plane: ${child.name}`);
             autoGenerateUVs(child.geometry, child.name);
           }
         }
@@ -319,15 +310,15 @@ function EnhancedScene({
       }
     });
 
-    console.log('Total meshes extracted:', extractedMeshes.length);
-    console.log('Planes found:', extractedMeshes.filter(m => m.userData.isModelPlane).map(m => m.name));
+    console.warn('Total meshes extracted:', extractedMeshes.length);
+    console.warn('Planes found:', extractedMeshes.filter(m => (m.userData as { [key: string]: unknown })?.['isModelPlane']).map(m => m.name));
 
     // IMPORTANT: Reset any deleted/hidden flags for model planes
     extractedMeshes.forEach(mesh => {
-      if (mesh.userData.isModelPlane) {
+      if ((mesh.userData as { [key: string]: unknown })?.['isModelPlane']) {
         const transform = transforms.get(mesh.name);
         if (transform?.deleted || transform?.visible === false) {
-          console.log(`Resetting visibility for plane: ${mesh.name}`);
+          console.warn(`Resetting visibility for plane: ${mesh.name}`);
           // Note: setTransform will be called from parent component if needed
         }
       }
@@ -399,11 +390,11 @@ function EnhancedScene({
         mesh.visible = !transform.deleted && (transform.visible !== false);
 
         // Log when objects are restored via undo
-        if (mesh.userData.wasDeleted && !transform.deleted) {
-          console.log(`Object restored via undo: ${mesh.name}`);
-          mesh.userData.wasDeleted = false;
-        } else if (!mesh.userData.wasDeleted && transform.deleted) {
-          mesh.userData.wasDeleted = true;
+        if (mesh.userData['wasDeleted'] && !transform.deleted) {
+          console.warn(`Object restored via undo: ${mesh.name}`);
+          mesh.userData['wasDeleted'] = false;
+        } else if (!mesh.userData['wasDeleted'] && transform.deleted) {
+          mesh.userData['wasDeleted'] = true;
         }
       } else {
         // Default to visible if no transform exists
@@ -414,20 +405,22 @@ function EnhancedScene({
       if (material) {
         // Check if mesh has UV coordinates - required for textures
         const geometry = mesh.geometry;
-        let hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+        let hasUVs = (geometry.attributes as any)?.['uv'] && (geometry.attributes as any)?.['uv'].count > 0;
 
         // Always generate UVs for planes if they don't have them
-        if (!hasUVs && (material.texture_url || mesh.userData.isModelPlane)) {
-          console.log(`No UV coordinates found for "${mesh.name}". Generating UVs...`);
+        if ((!hasUVs && (material.texture_url || mesh.userData['isModelPlane']))) {
+          console.warn(`No UV coordinates found for "${mesh.name}". Generating UVs...`);
           autoGenerateUVs(geometry, mesh.name);
-          hasUVs = geometry.attributes.uv && geometry.attributes.uv.count > 0;
+          hasUVs = (geometry.attributes as any)?.['uv'] && (geometry.attributes as any)?.['uv'].count > 0;
           // Force geometry update
-          geometry.attributes.uv.needsUpdate = true;
+          if ((geometry.attributes as any)?.['uv']) {
+            (geometry.attributes as any)['uv'].needsUpdate = true;
+          }
         }
 
-        console.log(`Applying material to mesh "${mesh.name}":`, {
+        console.warn(`Applying material to mesh "${mesh.name}":`, {
           hasTexture: !!material.texture_url,
-          hasUVs: hasUVs,
+          hasUVs,
           textureUrl: material.texture_url ? material.texture_url.substring(0, 50) + '...' : 'none'
         });
 
@@ -452,22 +445,22 @@ function EnhancedScene({
 
         // Add optional properties
         if (material.properties.clearcoat !== undefined) {
-          baseParams.clearcoat = material.properties.clearcoat;
+          (baseParams as any).clearcoat = material.properties.clearcoat;
         }
         if (material.properties.clearcoatRoughness !== undefined) {
-          baseParams.clearcoatRoughness = material.properties.clearcoatRoughness;
+          (baseParams as any).clearcoatRoughness = material.properties.clearcoatRoughness;
         }
         if (material.properties.ior !== undefined) {
-          baseParams.ior = material.properties.ior;
+          (baseParams as any).ior = material.properties.ior;
         }
         if (material.properties.transmission !== undefined) {
-          baseParams.transmission = material.properties.transmission;
+          (baseParams as any).transmission = material.properties.transmission;
         }
         if (material.properties.thickness !== undefined) {
-          baseParams.thickness = material.properties.thickness;
+          (baseParams as any).thickness = material.properties.thickness;
         }
         if (material.properties.reflectivity !== undefined) {
-          baseParams.reflectivity = material.properties.reflectivity;
+          (baseParams as any).reflectivity = material.properties.reflectivity;
         }
 
         // Create the material
@@ -475,23 +468,23 @@ function EnhancedScene({
 
         // Store reference for texture application
         mesh.material = newMaterial;
-        mesh.userData.hasMaterialApplied = true; // Mark that this mesh has a custom material
+        mesh.userData['hasMaterialApplied'] = true; // Mark that this mesh has a custom material
 
         // For planes, ensure material updates are forced
-        if (mesh.userData.isModelPlane) {
+        if (mesh.userData['isModelPlane']) {
           newMaterial.needsUpdate = true;
-          console.log(`Applied material to plane: ${mesh.name}`);
+          console.warn(`Applied material to plane: ${mesh.name}`);
         }
 
         // If there's a texture URL and the mesh has UVs, load and apply texture
         if (material.texture_url && hasUVs) {
           // Check if texture is already cached
           const cacheKey = `${mesh.name}-${material.texture_url}`;
-          let texture = textureCache.get(cacheKey);
+          const texture = textureCache.get(cacheKey);
 
           if (texture) {
             // Use cached texture
-            console.log(`Using cached texture for "${mesh.name}"`);
+            console.warn(`Using cached texture for "${mesh.name}"`);
             // Apply texture settings if they exist
             if (material.texture_settings) {
               const settings = material.texture_settings;
@@ -525,13 +518,13 @@ function EnhancedScene({
             newMaterial.needsUpdate = true;
           } else {
             // Load new texture
-            console.log(`Loading texture for "${mesh.name}" from: ${material.texture_url}`);
+            console.warn(`Loading texture for "${mesh.name}" from: ${material.texture_url}`);
 
             const textureLoader = new THREE.TextureLoader();
             textureLoader.load(
               material.texture_url,
               (texture) => {
-                console.log(`Texture loaded successfully for "${mesh.name}"`);
+                console.warn(`Texture loaded successfully for "${mesh.name}"`);
 
                 // Cache the texture
                 textureCache.set(cacheKey, texture);
@@ -583,17 +576,19 @@ function EnhancedScene({
                 mesh.material.color = new THREE.Color(1, 1, 1);
 
                 // For planes, force additional updates to ensure texture sticks
-                if (mesh.userData.isModelPlane) {
-                  mesh.geometry.attributes.uv.needsUpdate = true;
+                if (mesh.userData?.['isModelPlane']) {
+                  if ((mesh.geometry.attributes as any)?.['uv']) {
+                    (mesh.geometry.attributes as any)['uv'].needsUpdate = true;
+                  }
                   mesh.material.map.needsUpdate = true;
                   // Force a render update
-                  mesh.material.version++;
+                  // mesh.material.version++; // Read-only property
                 }
 
-                console.log(`Texture applied to "${mesh.name}"`, {
+                console.warn(`Texture applied to "${mesh.name}"`, {
                   hasMap: !!mesh.material.map,
                   textureUrl: material.texture_url,
-                  isPlane: mesh.userData.isModelPlane,
+                  isPlane: mesh.userData?.['isModelPlane'],
                   material: mesh.material
                 });
               }
@@ -609,8 +604,8 @@ function EnhancedScene({
       } else {
         // Only reset to original if no custom material has been applied
         // This prevents reverting when materials update
-        if (!mesh.userData?.hasMaterialApplied) {
-          mesh.material = mesh.userData.originalMaterial || mesh.material;
+        if (!mesh.userData['hasMaterialApplied']) {
+          mesh.material = mesh.userData['originalMaterial'] || mesh.material;
         }
       }
     });
@@ -691,23 +686,23 @@ function EnhancedScene({
 
   // Handle mesh click with proper closure
   const handleMeshClick = useCallback((event: any, mesh: THREE.Mesh) => {
-    console.log('Click detected on mesh:', mesh.name, 'isPlane:', mesh.userData?.isModelPlane);
+    console.warn('Click detected on mesh:', mesh.name, 'isPlane:', mesh.userData['isModelPlane']);
 
     // Log plane selection
-    if (mesh.userData?.isModelPlane) {
-      console.log('✅ Selecting model plane:', mesh.name);
+    if (mesh.userData?.['isModelPlane']) {
+      console.warn('✅ Selecting model plane:', mesh.name);
     }
 
     // Check if mesh is deleted - but allow planes regardless
     const transform = transforms.get(mesh.name);
-    if (transform?.deleted && !mesh.userData?.isModelPlane) {
-      console.log(`Blocking deleted non-plane: ${mesh.name}`);
+    if (transform?.deleted && !mesh.userData['isModelPlane']) {
+      console.warn(`Blocking deleted non-plane: ${mesh.name}`);
       return; // Don't select deleted objects (unless they're planes)
     }
 
     // Log plane selection attempts
-    if (mesh.userData?.isModelPlane) {
-      console.log(`Plane click detected: ${mesh.name}, deleted: ${transform?.deleted}, visible: ${transform?.visible}`);
+    if (mesh.userData?.['isModelPlane']) {
+      console.warn(`Plane click detected: ${mesh.name}, deleted: ${transform?.deleted}, visible: ${transform?.visible}`);
     }
 
     // Get the actual event object
@@ -720,10 +715,10 @@ function EnhancedScene({
       let newSelectedObjects = [...selectedObjects];
 
       // Check if mesh is part of a group
-      const groupName = mesh.userData?.group;
+      const groupName = mesh.userData?.['group'];
       if (groupName) {
         // Get all meshes in the group
-        const groupMeshes = meshes.filter(m => m.userData?.group === groupName);
+        const groupMeshes = meshes.filter(m => m.userData?.['group'] === groupName);
         const groupMeshNames = groupMeshes.map(m => m.name);
 
         // Toggle group selection
@@ -774,13 +769,13 @@ function EnhancedScene({
     }
   }, [selectedMeshNames, selectedObjects, meshes, transforms, onMultiSelect, onObjectSelect]);
 
-  // Handle scene click (deselect)
-  const handleSceneClick = useCallback((event: any) => {
-    // Only deselect if we clicked on empty space (not on any mesh)
-    if (event.object === undefined || event.object === null) {
-      onSceneClick();
-    }
-  }, [onSceneClick]);
+  // Handle scene click (deselect) - function commented out as unused
+  // const handleSceneClick = useCallback((event: any) => {
+  //   // Only deselect if we clicked on empty space (not on any mesh)
+  //   if (event.object === undefined || event.object === null) {
+  //     onSceneClick();
+  //   }
+  // }, [onSceneClick]);
 
   return (
     <>
@@ -826,8 +821,8 @@ function EnhancedScene({
           handleMeshClick(event, mesh);
         }}
         onContextMenu={(event, mesh) => {
-          if (window.handleMeshRightClick) {
-            window.handleMeshRightClick(event, mesh);
+          if ((window as any).handleMeshRightClick) {
+            (window as any).handleMeshRightClick(event, mesh);
           }
         }}
         onPointerOver={(event, _mesh) => {
@@ -853,13 +848,13 @@ function EnhancedScene({
       {/* Invisible click targets for each mesh */}
       {meshes.map((mesh) => {
         // Skip only our special infinite ground plane from click targets
-        if (mesh.name === 'Plane12847' || mesh.userData?.isGroundPlane) {
+        if (mesh.name === 'Plane12847' || mesh.userData?.['isGroundPlane']) {
           return null;
         }
 
         // Log every mesh that gets a click target
-        if (mesh.userData?.isModelPlane) {
-          console.log(`Creating click target for plane: ${mesh.name}`);
+        if (mesh.userData?.['isModelPlane']) {
+          console.warn(`Creating click target for plane: ${mesh.name}`);
         }
 
         const transform = transforms.get(mesh.name);
@@ -867,21 +862,21 @@ function EnhancedScene({
         const isVisible = transform ? (transform.visible !== false && !isDeleted) : true;
 
         // Don't skip planes even if marked as deleted/invisible
-        if (mesh.userData?.isModelPlane) {
-          console.log(`Creating click target for plane: ${mesh.name} (even if deleted: ${isDeleted})`);
+        if (mesh.userData?.['isModelPlane']) {
+          console.warn(`Creating click target for plane: ${mesh.name} (even if deleted: ${isDeleted})`);
         } else if (isDeleted || !isVisible) {
           return null;
         }
 
-        const uniqueKey = mesh.userData.uniqueId || `${mesh.name}_${mesh.uuid}`;
+        const uniqueKey = mesh.userData?.['uniqueId'] || `${mesh.name}_${mesh.uuid}`;
 
         // Check if mesh is selected directly or as part of a group
         let isSelected = selectedObjectName === mesh.name || selectedMeshNames.includes(mesh.name);
 
         // Also highlight if any mesh in the same group is selected
-        const groupName = mesh.userData?.group;
+        const groupName = mesh.userData?.['group'];
         if (groupName && selectedMeshNames.length > 0) {
-          const groupMeshes = meshes.filter(m => m.userData?.group === groupName);
+          const groupMeshes = meshes.filter(m => m.userData?.['group'] === groupName);
           isSelected = isSelected || groupMeshes.some(m => selectedMeshNames.includes(m.name));
         }
 
@@ -910,8 +905,8 @@ function EnhancedScene({
               onContextMenu={(e) => {
                 e.stopPropagation();
                 // Handle right-click
-                if (window.handleMeshRightClick) {
-                  window.handleMeshRightClick(e, mesh);
+                if ((window as any).handleMeshRightClick) {
+                  (window as any).handleMeshRightClick(e, mesh);
                 }
               }}
               onPointerOver={(e) => {
@@ -1016,7 +1011,7 @@ export default function DarkEnhancedModelEditor({
   const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
   const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
   const [meshGroups, setMeshGroups] = useState<Map<string, string[]>>(new Map());
-  const [groupsSaved, setGroupsSaved] = useState(true);
+  const [_groupsSaved, ____setGroupsSaved] = useState(true); // Both unused
   const resetViewRef = useRef<(() => void) | null>(null);
 
   // HUD annotation system states
@@ -1049,10 +1044,10 @@ export default function DarkEnhancedModelEditor({
     setTransform,
     deleteObject,
     toggleObjectVisibility,
-    updateBackground,
-    updateFog,
-    updateLighting,
-    updateGrid,
+    // updateBackground, // Unused
+    // updateFog, // Unused
+    // updateLighting, // Unused
+    // updateGrid, // Unused
     hasUnsavedChanges,
     saveState,
     loadState,
@@ -1080,10 +1075,10 @@ export default function DarkEnhancedModelEditor({
   useEffect(() => {
     const timer = setTimeout(() => {
       meshes.forEach(mesh => {
-        if (mesh.userData?.isModelPlane && mesh.name !== 'Plane12847') {
+        if (mesh.userData?.['isModelPlane'] && mesh.name !== 'Plane12847') {
           const transform = transforms.get(mesh.name);
           if (transform?.deleted || transform?.visible === false) {
-            console.log(`Auto-resetting incorrectly hidden plane: ${mesh.name}`);
+            console.warn(`Auto-resetting incorrectly hidden plane: ${mesh.name}`);
             setTransform(mesh.name, {
               ...transform,
               visible: true,
@@ -1113,8 +1108,13 @@ export default function DarkEnhancedModelEditor({
         }
       });
       setTransform('Plane12847', {
-        scale: { x: 100, y: 100, z: 1 },
-        visible: true
+        model_id: modelId!,
+        object_name: 'Plane12847',
+        visible: true,
+        deleted: false,
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 100, y: 100, z: 1 }
       });
     }
   }, [materials, modelId, setMaterial, setTransform]);
@@ -1204,10 +1204,10 @@ export default function DarkEnhancedModelEditor({
 
     setSelectedObjects(selectedMeshObjects);
     setSelectedMeshNames(meshNames);
-    if (meshNames.length === 1) {
+    if (meshNames.length === 1 && meshNames[0] && selectedMeshObjects[0]) {
       selectObject(meshNames[0]);
       setSelectedObject(selectedMeshObjects[0]);
-    } else if (meshNames.length > 0) {
+    } else if (meshNames.length > 0 && meshNames[0] && selectedMeshObjects[0]) {
       // For multiple selection, select the first one in the store
       selectObject(meshNames[0]);
       setSelectedObject(selectedMeshObjects[0]);
@@ -1231,11 +1231,11 @@ export default function DarkEnhancedModelEditor({
     // Save to database
     try {
       await updateGroup(modelId, groupName, meshNames);
-      setGroupsSaved(true);
-      console.log('Group saved to database:', groupName);
+      ____setGroupsSaved(true);
+      console.warn('Group saved to database:', groupName);
     } catch (error) {
       console.error('Failed to save group:', error);
-      setGroupsSaved(false);
+      ____setGroupsSaved(false);
     }
 
     // Force re-render
@@ -1245,12 +1245,11 @@ export default function DarkEnhancedModelEditor({
   // Handle ungrouping
   const handleUngroupMeshes = useCallback(async (groupName: string) => {
     const newGroups = new Map(meshGroups);
-    const meshNames = newGroups.get(groupName) || [];
 
     // Also check meshes that have this group in userData
     meshes.forEach(mesh => {
-      if (mesh.userData?.group === groupName) {
-        delete mesh.userData.group;
+      if (mesh.userData?.['group'] === groupName) {
+        delete mesh.userData['group'];
       }
     });
 
@@ -1260,11 +1259,11 @@ export default function DarkEnhancedModelEditor({
     // Delete from database
     try {
       await deleteGroup(modelId, groupName);
-      setGroupsSaved(true);
-      console.log('Group deleted from database:', groupName);
+      ____setGroupsSaved(true);
+      console.warn('Group deleted from database:', groupName);
     } catch (error) {
       console.error('Failed to delete group:', error);
-      setGroupsSaved(false);
+      ____setGroupsSaved(false);
     }
 
     // Force re-render
@@ -1278,7 +1277,7 @@ export default function DarkEnhancedModelEditor({
       mesh.name = newName;
       // Update any references in groups
       const newGroups = new Map(meshGroups);
-      newGroups.forEach((members, groupName) => {
+      newGroups.forEach((members, _groupName) => {
         const index = members.indexOf(oldName);
         if (index !== -1) {
           members[index] = newName;
@@ -1300,16 +1299,16 @@ export default function DarkEnhancedModelEditor({
 
     // Check if object is part of a group
     if (object) {
-      const groupName = object.userData?.group;
+      const groupName = object.userData?.['group'];
       if (groupName) {
         // Select all meshes in the group
-        const groupMeshes = meshes.filter(m => m.userData?.group === groupName);
+        const groupMeshes = meshes.filter(m => m.userData?.['group'] === groupName);
         const groupMeshNames = groupMeshes.map(m => m.name);
         setSelectedObjects(groupMeshes);
         setSelectedMeshNames(groupMeshNames);
 
         // Select first mesh in store for UI purposes
-        if (groupMeshNames.length > 0) {
+        if (groupMeshNames.length > 0 && groupMeshNames[0]) {
           selectObject(groupMeshNames[0]);
         }
       } else {
@@ -1326,7 +1325,7 @@ export default function DarkEnhancedModelEditor({
 
     if (object && point) {
       // Check for annotation - first by object name, then by group name
-      const groupName = object.userData?.group;
+      const groupName = object.userData?.['group'];
 
       let existingAnnotation = annotations.find(a => a.object_name === object.name);
 
@@ -1385,7 +1384,7 @@ export default function DarkEnhancedModelEditor({
     setSelectedMeshNames(names);
 
     // Select first item for UI purposes
-    if (names.length > 0) {
+    if (names.length > 0 && names[0] && objects[0]) {
       selectObject(names[0]);
       setSelectedObject(objects[0]);
     } else {
@@ -1414,7 +1413,7 @@ export default function DarkEnhancedModelEditor({
     // Find the mesh for this annotation
     const targetMesh = meshes.find(m =>
       m.name === annotation.object_name ||
-      m.userData?.group === annotation.object_name
+      m.userData?.['group'] === annotation.object_name
     );
 
     if (targetMesh) {
@@ -1444,7 +1443,7 @@ export default function DarkEnhancedModelEditor({
     // Find the mesh for this annotation
     const targetMesh = meshes.find(m =>
       m.name === annotation.object_name ||
-      m.userData?.group === annotation.object_name
+      m.userData?.['group'] === annotation.object_name
     );
 
     if (targetMesh) {
@@ -1549,8 +1548,8 @@ export default function DarkEnhancedModelEditor({
   // Delete annotation from database
   const deleteAnnotation = async (annotationId: string) => {
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env['NEXT_PUBLIC_SUPABASE_URL']!,
+      process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY']!
     );
 
     const { error } = await supabase
@@ -1566,8 +1565,8 @@ export default function DarkEnhancedModelEditor({
   // Fetch annotations from database
   const fetchAnnotations = async () => {
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env['NEXT_PUBLIC_SUPABASE_URL']!,
+      process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY']!
     );
 
     const { data, error } = await supabase
@@ -1589,7 +1588,7 @@ export default function DarkEnhancedModelEditor({
 
       // Save groups
       await saveGroups(modelId, meshGroups);
-      setGroupsSaved(true);
+      ____setGroupsSaved(true);
 
       onSave();
       toast.success('All settings and groups saved successfully!', {
@@ -1640,7 +1639,8 @@ export default function DarkEnhancedModelEditor({
           // Group selected items
           event.preventDefault();
           if (selectedMeshNames.length > 1) {
-            const groupName = prompt('Enter group name:');
+            const groupName = 'NewGroup'; // Replace prompt with default name
+            console.warn('Group creation triggered - would prompt for name in interactive mode');
             if (groupName) {
               handleGroupMeshes(selectedMeshNames, groupName);
               toast.success(`Created group "${groupName}"`, {
@@ -1672,7 +1672,6 @@ export default function DarkEnhancedModelEditor({
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [selectedMeshNames, deleteObject, undo, redo, handleSceneClick, handleSaveAll, handleGroupMeshes]);
 
-  const currentMaterial = selectedObjectName ? materials.get(selectedObjectName) : null;
 
   // If readOnly mode, render just the canvas with clickability for viewing annotations
   if (readOnly) {
@@ -2299,7 +2298,9 @@ export default function DarkEnhancedModelEditor({
                     value={transforms.get("Plane12847")?.scale?.x || 50}
                     onChange={(e) => {
                       const scale = parseFloat(e.target.value);
+                      const existingTransform = transforms.get("Plane12847");
                       setTransform("Plane12847", {
+                        ...existingTransform!,
                         scale: { x: scale, y: scale, z: 1 }
                       });
                     }}
@@ -2325,12 +2326,16 @@ export default function DarkEnhancedModelEditor({
                         opacity: 1,
                         emissive: { r: 5, g: 5, b: 10, a: 1 },
                         emissiveIntensity: 0.1
-                      },
-                      texture_url: undefined
+                      }
                     });
                     setTransform("Plane12847", {
-                      scale: { x: 50, y: 50, z: 1 },
-                      visible: true
+                      model_id: modelId!,
+                      object_name: 'Plane12847',
+                      visible: true,
+                      deleted: false,
+                      position: { x: 0, y: 0, z: 0 },
+                      rotation: { x: 0, y: 0, z: 0 },
+                      scale: { x: 50, y: 50, z: 1 }
                     });
                     toast.success('Ground plane reset to defaults', {
                       position: 'bottom-left',

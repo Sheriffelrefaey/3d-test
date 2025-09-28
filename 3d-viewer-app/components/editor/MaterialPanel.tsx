@@ -3,7 +3,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import * as Slider from '@radix-ui/react-slider';
 import * as Collapsible from '@radix-ui/react-collapsible';
-import * as Select from '@radix-ui/react-select';
 import {
   ChevronDown,
   ChevronRight,
@@ -114,7 +113,7 @@ export default function MaterialPanel({
 
     // Check file size (10MB limit)
     if (file.size > 10 * 1024 * 1024) {
-      alert('File size must be less than 10MB');
+      console.warn('File size must be less than 10MB');
       return;
     }
 
@@ -263,7 +262,7 @@ export default function MaterialPanel({
               {material && !material.hasUVs && (
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2 mb-2">
                   <p className="text-xs text-yellow-400">
-                    ⚠️ This object doesn't have UV coordinates. Textures may not display correctly.
+                    ⚠️ This object doesn&apos;t have UV coordinates. Textures may not display correctly.
                   </p>
                 </div>
               )}
@@ -279,11 +278,8 @@ export default function MaterialPanel({
                     onClick={() => {
                       setTexturePreview(null);
                       if (material) {
-                        onChange({
-                          ...material,
-                          texture_url: null,
-                          texture_settings: null
-                        });
+                        const { texture_url: _texture_url, texture_settings: _texture_settings, ...materialWithoutTexture } = material;
+                        onChange(materialWithoutTexture);
                       }
                     }}
                     className="absolute top-2 right-2 p-1 bg-red-500 rounded hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
@@ -687,7 +683,7 @@ function PropertySlider({
       <Slider.Root
         className="relative flex items-center select-none touch-none w-full h-5"
         value={[value]}
-        onValueChange={([v]) => onChange(v)}
+        onValueChange={([v]) => onChange(v || 0)}
         max={max}
         min={min}
         step={step}

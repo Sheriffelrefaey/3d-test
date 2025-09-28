@@ -4,10 +4,11 @@ import { useRef, useEffect } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { OrbitControls } from '@react-three/drei';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
 interface CameraAnimatorProps {
   targetPosition: THREE.Vector3 | null;
-  targetObject: any | null;  // Allow any type to properly check
+  targetObject: THREE.Object3D | null;  // Allow any type to properly check
   onAnimationComplete?: () => void;
   enabled?: boolean;
 }
@@ -57,8 +58,8 @@ export default function CameraAnimator({
   onAnimationComplete,
   enabled = true
 }: CameraAnimatorProps) {
-  const { camera, gl, scene } = useThree();
-  const controlsRef = useRef<any>(null);
+  const { camera, scene } = useThree(); // gl removed as unused
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const animationRef = useRef<{
     isAnimating: boolean;
     startTime: number;
@@ -71,7 +72,7 @@ export default function CameraAnimator({
     progress: number;
   } | null>(null);
   const lastPatternIndex = useRef(0);
-  const modelBoundsRef = useRef<{ size: number; center: THREE.Vector3 }>();
+  const modelBoundsRef = useRef<{ size: number; center: THREE.Vector3 } | undefined>(undefined);
 
   // Calculate overall model bounds on mount (excluding ground plane)
   useEffect(() => {
@@ -82,7 +83,8 @@ export default function CameraAnimator({
       if (child instanceof THREE.Mesh && child.name !== 'Plane12847') {
         // Use geometry bounds instead of object bounds to avoid including children
         child.geometry.computeBoundingBox();
-        const meshBox = child.geometry.boundingBox!.clone();
+        if (!child.geometry.boundingBox) return;
+        const meshBox = child.geometry.boundingBox.clone();
         meshBox.applyMatrix4(child.matrixWorld);
 
         if (!hasObjects) {
@@ -100,7 +102,7 @@ export default function CameraAnimator({
       const maxDim = Math.max(size.x, size.y, size.z);
 
       // Log for debugging
-      console.log('Model bounds calculated (excluding Plane12847):', {
+      console.warn('Model bounds calculated (excluding Plane12847):', {
         size: maxDim,
         center,
         box
@@ -114,11 +116,11 @@ export default function CameraAnimator({
     if (targetObject && targetPosition && enabled) {
       // Skip camera animation for ground plane
       if (targetObject.name === 'Plane12847') {
-        console.log('Skipping camera animation for Plane12847');
+        console.warn('Skipping camera animation for Plane12847');
         return;
       }
 
-      console.log('Camera animation target:', {
+      console.warn('Camera animation target:', {
         name: targetObject.name,
         type: targetObject.type,
         position: targetPosition
@@ -132,7 +134,8 @@ export default function CameraAnimator({
       if (targetObject instanceof THREE.Mesh) {
         // For meshes, use geometry bounding box
         targetObject.geometry.computeBoundingBox();
-        box = targetObject.geometry.boundingBox!.clone();
+        if (!targetObject.geometry.boundingBox) return;
+        box = targetObject.geometry.boundingBox.clone();
         box.applyMatrix4(targetObject.matrixWorld);
         center = box.getCenter(new THREE.Vector3());
         size = box.getSize(new THREE.Vector3());
@@ -141,7 +144,7 @@ export default function CameraAnimator({
         box = new THREE.Box3();
         let hasValidObject = false;
 
-        targetObject.traverse((child) => {
+        targetObject.traverse((child: THREE.Object3D) => {
           if (child instanceof THREE.Mesh && child.name !== 'Plane12847') {
             if (!hasValidObject) {
               box.setFromObject(child);
@@ -207,9 +210,10 @@ export default function CameraAnimator({
       }
 
       const pattern = CAMERA_PATTERNS[patternIndex];
+      if (!pattern) return;
       lastPatternIndex.current = (patternIndex + 1) % CAMERA_PATTERNS.length;
 
-      console.log('Base distance calculation:', {
+      console.warn('Base distance calculation:', {
         maxDim,
         baseDistance,
         pattern: pattern.name
@@ -225,7 +229,7 @@ export default function CameraAnimator({
       // Ensure camera never goes below ground level (y = 0.5)
       finalCameraPos.y = Math.max(0.5, finalCameraPos.y);
 
-      console.log('Camera animation calculated:', {
+      console.warn('Camera animation calculated:', {
         objectSize: maxDim,
         baseDistance,
         finalCameraPos,
@@ -233,7 +237,7 @@ export default function CameraAnimator({
       });
 
       // Calculate look-at target with offset
-      const lookAtTarget = center.clone().add(pattern.lookAtOffset.clone().multiplyScalar(maxDim));
+      const lookAtTarget = center.clone().add(pattern?.lookAtOffset.clone().multiplyScalar(maxDim) || new THREE.Vector3());
 
       // Get current orbit controls target
       const currentTarget = controlsRef.current?.target
@@ -244,12 +248,12 @@ export default function CameraAnimator({
       animationRef.current = {
         isAnimating: true,
         startTime: Date.now(),
-        duration: pattern.duration,
+        duration: pattern?.duration || 2000,
         startPos: currentCameraPos,
         endPos: finalCameraPos,
         startTarget: currentTarget,
         endTarget: lookAtTarget,
-        pattern: pattern,
+        pattern,
         progress: 0
       };
 
@@ -276,6 +280,8 @@ export default function CameraAnimator({
         endTarget,
         pattern
       } = animationRef.current;
+
+      if (!pattern) return;
 
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
@@ -343,12 +349,11 @@ export default function CameraAnimator({
     ? Math.max(modelBoundsRef.current.size * 0.05, 0.3) // Allow close zoom but not too close
     : 0.3;
 
-  console.log('Camera limits:', { maxDistance, minDistance, modelSize: modelBoundsRef.current?.size });
+  console.warn('Camera limits:', { maxDistance, minDistance, modelSize: modelBoundsRef.current?.size });
 
   return (
     <OrbitControls
       ref={controlsRef}
-      args={[camera, gl.domElement]}
       enableDamping
       dampingFactor={0.05}
       rotateSpeed={1.0}
