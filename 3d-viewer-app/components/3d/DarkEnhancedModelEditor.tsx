@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Canvas, useThree, useLoader, useFrame } from '@react-three/fiber';
 import { createPortal } from 'react-dom';
 import toast, { Toaster } from 'react-hot-toast';
+import { motion } from 'framer-motion';
 import {
   Environment,
   GizmoHelper,
@@ -1024,6 +1025,7 @@ export default function DarkEnhancedModelEditor({
   const [autoRotate, setAutoRotate] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showGroundSettings, setShowGroundSettings] = useState(false);
+  const [showAnnotationsMenu, setShowAnnotationsMenu] = useState(false);
   const lastLoadedModelIdRef = useRef<string | null>(null);
 
   // Initialize store
@@ -1399,6 +1401,30 @@ export default function DarkEnhancedModelEditor({
     // For now, just select the item
   }, [selectedMeshNames, selectObject]);
 
+  // Handle annotation selection from menu
+  const handleAnnotationMenuClick = useCallback((annotation: Annotation) => {
+    // Find the mesh for this annotation
+    const targetMesh = meshes.find(m =>
+      m.name === annotation.object_name ||
+      m.userData?.group === annotation.object_name
+    );
+
+    if (targetMesh) {
+      // Create a simulated click position from annotation
+      const clickPos = new THREE.Vector3(
+        annotation.position_x || 0,
+        annotation.position_y || 0,
+        annotation.position_z || 0
+      );
+
+      // Trigger the same selection behavior as clicking on the object
+      handleObjectSelect(targetMesh, clickPos);
+
+      // Close the menu
+      setShowAnnotationsMenu(false);
+    }
+  }, [meshes, handleObjectSelect]);
+
   // Make functions available globally for EnhancedScene
   useEffect(() => {
     (window as any).updateMultiSelection = updateMultiSelection;
@@ -1674,6 +1700,107 @@ export default function DarkEnhancedModelEditor({
                   filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5))'
                 }}
               />
+            </div>
+
+            {/* Annotations Menu Button - Bottom Right */}
+            <div className="absolute bottom-4 right-4">
+              <button
+                onClick={() => setShowAnnotationsMenu(!showAnnotationsMenu)}
+                className="glass-button p-3 rounded-lg text-white hover:text-blue-400 transition-all duration-300"
+                title="Show Annotations Menu"
+              >
+                <img
+                  src="/menu.svg"
+                  alt="Menu"
+                  className="w-6 h-6"
+                  style={{
+                    filter: 'brightness(0) saturate(100%) invert(100%)'
+                  }}
+                />
+              </button>
+
+              {/* Annotations Dropdown Menu */}
+              {showAnnotationsMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute bottom-full right-0 mb-2 w-80"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(10, 10, 10, 0.5) 100%)',
+                    backdropFilter: 'blur(30px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(30px) saturate(180%)',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    boxShadow: `
+                      0 0 80px rgba(255, 255, 255, 0.1),
+                      0 0 160px rgba(255, 255, 255, 0.05),
+                      0 10px 40px rgba(0, 0, 0, 0.6),
+                      inset 0 1px 0 rgba(255, 255, 255, 0.15)
+                    `
+                  }}
+                >
+                  {/* Menu Header */}
+                  <div className="px-4 py-3 border-b border-white/10">
+                    <h3
+                      className="text-white font-bold text-lg"
+                      style={{
+                        fontFamily: "'MocFont', Arial, sans-serif",
+                        direction: 'rtl',
+                        textAlign: 'right',
+                        textShadow: '0 0 20px rgba(255, 255, 255, 0.3)',
+                        letterSpacing: '0.5px'
+                      }}
+                    >
+                      التعليقات التوضيحية
+                    </h3>
+                  </div>
+
+                  {/* Annotations List */}
+                  <div className="max-h-96 overflow-y-auto">
+                    {annotations.filter(ann => ann.title || ann.description).length > 0 ? (
+                      annotations.filter(ann => ann.title || ann.description).map((annotation, index) => (
+                        <button
+                          key={annotation.id || index}
+                          onClick={() => handleAnnotationMenuClick(annotation)}
+                          className="w-full text-right px-4 py-3 hover:bg-white/10 transition-colors border-b border-white/5 last:border-0"
+                          style={{
+                            direction: 'rtl'
+                          }}
+                        >
+                          <div className="text-white font-medium text-base mb-1"
+                            style={{
+                              fontFamily: "'MocFont', Arial, sans-serif",
+                              textShadow: '0 0 10px rgba(255, 255, 255, 0.2)'
+                            }}
+                          >
+                            {annotation.title || annotation.object_name}
+                          </div>
+                          {annotation.description && (
+                            <div className="text-gray-400 text-sm"
+                              style={{
+                                fontFamily: "'MocFont', Arial, sans-serif"
+                              }}
+                            >
+                              {annotation.description}
+                            </div>
+                          )}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-8 text-center text-gray-400">
+                        <p style={{
+                          fontFamily: "'MocFont', Arial, sans-serif",
+                          direction: 'rtl'
+                        }}>
+                          لا توجد تعليقات توضيحية
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
             </div>
           </>
         )}
