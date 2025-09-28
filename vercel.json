@@ -1,6 +1,0 @@
-{
-  "buildCommand": "cd 3d-viewer-app && npm install && npm run build",
-  "outputDirectory": "3d-viewer-app/.next",
-  "installCommand": "cd 3d-viewer-app && npm install",
-  "framework": "nextjs"
-}
