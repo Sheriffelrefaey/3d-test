@@ -308,7 +308,7 @@ export default function CameraAnimator({
       camera.updateProjectionMatrix();
 
       // Update orbit controls target
-      if (controlsRef.current) {
+      if (controlsRef.current?.target) {
         controlsRef.current.target.copy(currentTarget);
       }
 

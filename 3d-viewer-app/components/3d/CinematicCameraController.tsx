@@ -170,7 +170,9 @@ export default function CinematicCameraController({
       camera.position.z = Math.cos(time * speed) * radius;
       camera.position.y = height + Math.sin(time * speed * 2) * 2; // Gentle vertical movement
 
-      camera.lookAt(controlsRef.current.target);
+      if (controlsRef.current?.target) {
+        camera.lookAt(controlsRef.current.target);
+      }
     }
 
     // Handle animation
@@ -210,8 +212,10 @@ export default function CinematicCameraController({
     }
 
     // Smooth target interpolation
-    controlsRef.current.target.lerpVectors(startTarget, endTarget, t);
-    controlsRef.current.update();
+    if (controlsRef.current?.target) {
+      controlsRef.current.target.lerpVectors(startTarget, endTarget, t);
+      controlsRef.current.update();
+    }
 
     // Add subtle camera shake for cinematic feel
     if (pattern === 'swoop' && progress > 0.7 && progress < 0.95) {
