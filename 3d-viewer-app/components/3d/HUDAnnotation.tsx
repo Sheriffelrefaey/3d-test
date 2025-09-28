@@ -69,8 +69,12 @@ export function HUDAnnotationCard({ annotation, screenPosition, onClose, isVisib
       const textTimer = setTimeout(() => {
         setShowText(true);
 
-        // Smooth text reveal for title
-        const title = annotation.title || annotation.object_name || 'Object';
+        // Smooth text reveal for title - only show if there's actual content
+        const title = annotation.title || '';
+        if (!title && !annotation.description) {
+          // No content to show - skip animation
+          return;
+        }
         let titleIndex = 0;
         const titleInterval = setInterval(() => {
           if (titleIndex <= title.length) {
@@ -104,6 +108,11 @@ export function HUDAnnotationCard({ annotation, screenPosition, onClose, isVisib
   }, [isVisible, annotation?.id]); // Trigger on annotation ID change
 
   if (!annotation || !isVisible) return null;
+
+  // Don't show HUD card if there's no actual annotation content
+  if (!annotation.title && !annotation.description) {
+    return null;
+  }
 
   return (
     <AnimatePresence mode="wait">
@@ -325,9 +334,20 @@ export function HUDAnnotationCard({ annotation, screenPosition, onClose, isVisib
                       0 0 130px rgba(255, 255, 255, 0.15);
                   }
                 }
+                @font-face {
+                  font-family: 'MocFont';
+                  src: url('/fonts/moc-font.otf') format('opentype');
+                  font-weight: normal;
+                  font-style: normal;
+                  font-display: swap;
+                }
               `}</style>
 
-              <div className="relative z-10">
+              <div className="relative z-10" style={{
+                direction: 'rtl',
+                textAlign: 'right',
+                fontFamily: "'MocFont', Arial, sans-serif"
+              }}>
                 <motion.h3
                   initial={{ opacity: 0, filter: 'blur(10px)' }}
                   animate={{
@@ -335,8 +355,9 @@ export function HUDAnnotationCard({ annotation, screenPosition, onClose, isVisib
                     filter: showText ? 'blur(0px)' : 'blur(10px)'
                   }}
                   transition={{ duration: 0.5 }}
-                  className="text-white font-bold text-xl mb-2 leading-tight"
+                  className="text-white font-bold mb-3 leading-tight"
                   style={{
+                    fontSize: '26px',
                     textShadow: `
                       0 0 40px rgba(255, 255, 255, 0.4),
                       0 0 80px rgba(255, 255, 255, 0.2),
@@ -345,7 +366,9 @@ export function HUDAnnotationCard({ annotation, screenPosition, onClose, isVisib
                     `,
                     animation: 'textGlow 2s ease-in-out infinite',
                     letterSpacing: '0.5px',
-                    filter: 'blur(0.2px)'
+                    filter: 'blur(0.2px)',
+                    direction: 'rtl',
+                    unicodeBidi: 'embed'
                   }}
                 >
                   {titleText}
@@ -361,15 +384,19 @@ export function HUDAnnotationCard({ annotation, screenPosition, onClose, isVisib
                       filter: showText ? 'blur(0px)' : 'blur(10px)'
                     }}
                     transition={{ duration: 0.5, delay: 0.1 }}
-                    className="text-gray-200 text-base leading-relaxed"
+                    className="text-gray-200 leading-relaxed"
                     style={{
+                      fontSize: '18px',
                       textShadow: `
                         0 0 30px rgba(255, 255, 255, 0.25),
                         0 0 60px rgba(255, 255, 255, 0.1),
                         0 2px 10px rgba(0, 0, 0, 0.8)
                       `,
                       letterSpacing: '0.3px',
-                      filter: 'blur(0.1px)'
+                      filter: 'blur(0.1px)',
+                      direction: 'rtl',
+                      unicodeBidi: 'embed',
+                      lineHeight: '1.7'
                     }}
                   >
                     {descText}
