@@ -10,6 +10,9 @@ interface CinematicCameraControllerProps {
   targetObject: any | null;
   onAnimationComplete?: () => void;
   autoRotate?: boolean;
+  annotations?: any[];
+  onAnnotationFocus?: (annotation: any) => void;
+  onDroneModeStopped?: () => void;
 }
 
 // Creative camera movement patterns
@@ -21,11 +24,24 @@ export default function CinematicCameraController({
   targetPosition,
   targetObject,
   onAnimationComplete,
-  autoRotate = false
+  autoRotate = false,
+  annotations = [],
+  onAnnotationFocus,
+  onDroneModeStopped
 }: CinematicCameraControllerProps) {
   const { camera, gl } = useThree();
   const controlsRef = useRef<any>(null);
   const patternIndex = useRef(0);
+
+  // Drone mode state
+  const droneStateRef = useRef({
+    currentAnnotationIndex: 0,
+    waitingForHUD: false,
+    hudDisplayTime: 0,
+    lastMoveTime: 0,
+    HUD_DISPLAY_DURATION: 8000, // Wait 8 seconds for HUD text to complete
+    MOVE_DELAY: 1500 // 1.5 second delay before starting next move
+  });
 
   const animationRef = useRef<{
     active: boolean;
@@ -157,21 +173,110 @@ export default function CinematicCameraController({
 
   }, [targetObject, targetPosition, camera]);
 
+  // Handle interaction to stop drone mode
+  useEffect(() => {
+    if (!autoRotate) return;
+
+    const handleInteraction = () => {
+      if (autoRotate && onDroneModeStopped) {
+        onDroneModeStopped();
+      }
+    };
+
+    window.addEventListener('click', handleInteraction);
+    window.addEventListener('mousedown', handleInteraction);
+    window.addEventListener('touchstart', handleInteraction);
+    window.addEventListener('keydown', handleInteraction);
+
+    return () => {
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('mousedown', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+      window.removeEventListener('keydown', handleInteraction);
+    };
+  }, [autoRotate, onDroneModeStopped]);
+
   // Smooth animation with creative paths
   useFrame((state) => {
-    // Auto-rotate drone mode
+    // Enhanced drone mode - cycle through annotations
     if (autoRotate && controlsRef.current && !animationRef.current?.active) {
-      const time = state.clock.getElapsedTime();
-      const radius = 15;
-      const height = 8;
-      const speed = 0.2;
+      const droneState = droneStateRef.current;
+      const visibleAnnotations = annotations.filter(ann =>
+        (ann.title || ann.description) && ann.menu_visible !== false
+      ).sort((a, b) => (a.menu_order || 0) - (b.menu_order || 0));
 
-      camera.position.x = Math.sin(time * speed) * radius;
-      camera.position.z = Math.cos(time * speed) * radius;
-      camera.position.y = height + Math.sin(time * speed * 2) * 2; // Gentle vertical movement
+      if (visibleAnnotations.length > 0) {
+        const currentTime = Date.now();
 
-      if (controlsRef.current?.target) {
-        camera.lookAt(controlsRef.current.target);
+        // Check if we should move to next annotation
+        if (!droneState.waitingForHUD) {
+          // Start waiting for HUD
+          if (droneState.lastMoveTime === 0) {
+            droneState.lastMoveTime = currentTime;
+            droneState.waitingForHUD = true;
+            droneState.hudDisplayTime = currentTime;
+
+            // Trigger HUD for current annotation
+            const currentAnnotation = visibleAnnotations[droneState.currentAnnotationIndex];
+            if (onAnnotationFocus) {
+              onAnnotationFocus(currentAnnotation);
+            }
+          }
+        } else {
+          // Check if HUD display time has elapsed
+          if (currentTime - droneState.hudDisplayTime >= droneState.HUD_DISPLAY_DURATION) {
+            // Move to next annotation
+            droneState.currentAnnotationIndex = (droneState.currentAnnotationIndex + 1) % visibleAnnotations.length;
+            droneState.waitingForHUD = false;
+            droneState.lastMoveTime = 0;
+
+            // Trigger camera movement to next annotation
+            const nextAnnotation = visibleAnnotations[droneState.currentAnnotationIndex];
+            const targetPos = new THREE.Vector3(
+              nextAnnotation.position_x || 0,
+              nextAnnotation.position_y || 0,
+              nextAnnotation.position_z || 0
+            );
+
+            // Calculate camera position - closer and slower
+            const distance = 5; // Closer to model
+            const angle = Math.atan2(targetPos.z, targetPos.x) + Math.PI / 4;
+            const height = targetPos.y + 2;
+
+            const newCameraPos = new THREE.Vector3(
+              targetPos.x + Math.cos(angle) * distance,
+              height,
+              targetPos.z + Math.sin(angle) * distance
+            );
+
+            // Start smooth animation
+            animationRef.current = {
+              active: true,
+              startTime: Date.now(),
+              duration: 4000, // Even slower movement (4 seconds)
+              startPos: camera.position.clone(),
+              endPos: newCameraPos,
+              startTarget: controlsRef.current.target.clone(),
+              endTarget: targetPos,
+              pattern: 'dolly', // Simple dolly movement for drone mode
+              midPoint: undefined
+            };
+          }
+        }
+      } else {
+        // Fallback to simple rotation if no annotations
+        const time = state.clock.getElapsedTime();
+        const radius = 8; // Closer
+        const height = 4;
+        const speed = 0.1; // Slower
+
+        camera.position.x = Math.sin(time * speed) * radius;
+        camera.position.z = Math.cos(time * speed) * radius;
+        camera.position.y = height + Math.sin(time * speed * 0.5) * 1; // Gentler vertical movement
+
+        if (controlsRef.current?.target) {
+          camera.lookAt(controlsRef.current.target);
+        }
       }
     }
 

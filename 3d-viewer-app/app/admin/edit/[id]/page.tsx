@@ -57,7 +57,10 @@ export default function EditModelPage({ params }: EditPageProps) {
         position_x: ann.position?.x || 0,
         position_y: ann.position?.y || 0,
         position_z: ann.position?.z || 0,
-        object_name: ann.object_name || 'Object'
+        object_name: ann.object_name || 'Object',
+        menu_visible: ann.menu_visible ?? true,
+        menu_order: ann.menu_order ?? 0,
+        menu_name: ann.menu_name || ''
       }));
 
       setAnnotations(convertedAnnotations);
@@ -95,7 +98,7 @@ export default function EditModelPage({ params }: EditPageProps) {
         const validAnnotations = updatedAnnotations.filter(ann => ann.title && ann.title.trim() !== '');
 
         if (validAnnotations.length > 0) {
-          const annotationsToInsert = validAnnotations.map(ann => ({
+          const annotationsToInsert = validAnnotations.map((ann, index) => ({
             model_id: resolvedParams.id,
             object_name: ann.object_name || 'Object', // Include object_name field
             title: ann.title,
@@ -105,7 +108,10 @@ export default function EditModelPage({ params }: EditPageProps) {
               y: ann.position_y || 0,
               z: ann.position_z || 0
             },
-            color: ann.color || '#ff0000'
+            color: ann.color || '#ff0000',
+            menu_visible: ann.menu_visible !== false, // Default to true if not specified
+            menu_order: ann.menu_order ?? index, // Use provided order or index as fallback
+            menu_name: ann.menu_name || null // Custom menu name
           }));
 
           console.log('Inserting annotations:', annotationsToInsert);

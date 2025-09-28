@@ -48,6 +48,7 @@ import ObjectHierarchyPanel from '@/components/editor/ObjectHierarchyPanel';
 import { HUDAnnotationCard } from './HUDAnnotation';
 import CinematicCameraController from './CinematicCameraController';
 import InfiniteGroundPlane from './InfiniteGroundPlane';
+import { DraggableAnnotationsList } from '@/components/ui/DraggableAnnotationsList';
 
 // Global texture cache to prevent reloading
 const textureCache = new Map<string, THREE.Texture>();
@@ -175,7 +176,9 @@ function EnhancedScene({
   readOnly = false,
   setCameraTarget,
   cameraTarget,
-  autoRotate
+  autoRotate,
+  handleDroneAnnotationFocus,
+  handleDroneModeStopped
 }: {
   modelUrl: string;
   annotations: Annotation[];
@@ -193,6 +196,8 @@ function EnhancedScene({
   setCameraTarget: (target: { position: THREE.Vector3; object: THREE.Object3D; } | null) => void;
   cameraTarget: { position: THREE.Vector3; object: THREE.Object3D; } | null;
   autoRotate: boolean;
+  handleDroneAnnotationFocus: (annotation: Annotation) => void;
+  handleDroneModeStopped: () => void;
 }) {
   const gltf = useLoader(getGLTFLoader, modelUrl);
   const { camera, scene } = useThree();
@@ -974,6 +979,9 @@ function EnhancedScene({
         targetPosition={cameraTarget?.position || null}
         targetObject={cameraTarget?.object || null}
         autoRotate={autoRotate}
+        annotations={annotations}
+        onAnnotationFocus={handleDroneAnnotationFocus}
+        onDroneModeStopped={handleDroneModeStopped}
         onAnimationComplete={() => {
           // Animation complete callback
         }}
@@ -1420,10 +1428,72 @@ export default function DarkEnhancedModelEditor({
       // Trigger the same selection behavior as clicking on the object
       handleObjectSelect(targetMesh, clickPos);
 
+      // Trigger camera animation to the target object
+      setCameraTarget({
+        position: clickPos,
+        object: targetMesh
+      });
+
       // Close the menu
       setShowAnnotationsMenu(false);
     }
+  }, [meshes, handleObjectSelect, setCameraTarget]);
+
+  // Handle drone mode annotation focus
+  const handleDroneAnnotationFocus = useCallback((annotation: Annotation) => {
+    // Find the mesh for this annotation
+    const targetMesh = meshes.find(m =>
+      m.name === annotation.object_name ||
+      m.userData?.group === annotation.object_name
+    );
+
+    if (targetMesh) {
+      const clickPos = new THREE.Vector3(
+        annotation.position_x || 0,
+        annotation.position_y || 0,
+        annotation.position_z || 0
+      );
+
+      // Just select and show HUD, don't trigger camera movement (drone mode handles that)
+      handleObjectSelect(targetMesh, clickPos);
+    }
   }, [meshes, handleObjectSelect]);
+
+  // Handle drone mode stop
+  const handleDroneModeStopped = useCallback(() => {
+    setAutoRotate(false);
+  }, []);
+
+  // Toggle menu visibility for annotation
+  const toggleAnnotationMenuVisibility = useCallback((annotationId: string) => {
+    const updatedAnnotations = annotations.map(ann => {
+      if (ann.id === annotationId) {
+        return { ...ann, menu_visible: ann.menu_visible === false ? true : false };
+      }
+      return ann;
+    });
+    onAnnotationsChange(updatedAnnotations);
+  }, [annotations, onAnnotationsChange]);
+
+  // Update menu order for annotations
+  const updateAnnotationMenuOrder = useCallback((reorderedAnnotations: Annotation[]) => {
+    const updatedAnnotations = reorderedAnnotations.map((ann, index) => ({
+      ...ann,
+      menu_order: index
+    }));
+    onAnnotationsChange(updatedAnnotations);
+  }, [onAnnotationsChange]);
+
+  // Handle renaming annotation menu items
+  const handleAnnotationMenuRename = useCallback((annotationId: string, newName: string) => {
+    const updatedAnnotations = annotations.map(ann => {
+      if (ann.id === annotationId) {
+        return { ...ann, menu_name: newName };
+      }
+      return ann;
+    });
+    onAnnotationsChange(updatedAnnotations);
+  }, [annotations, onAnnotationsChange]);
 
   // Make functions available globally for EnhancedScene
   useEffect(() => {
@@ -1632,6 +1702,8 @@ export default function DarkEnhancedModelEditor({
               setCameraTarget={setCameraTarget}
               cameraTarget={cameraTarget}
               autoRotate={autoRotate}
+              handleDroneAnnotationFocus={handleDroneAnnotationFocus}
+              handleDroneModeStopped={handleDroneModeStopped}
             />
             <ScreenPositionUpdater
               clickPosition={clickPosition}
@@ -1642,6 +1714,9 @@ export default function DarkEnhancedModelEditor({
               targetPosition={cameraTarget?.position || null}
               targetObject={cameraTarget?.object || null}
               autoRotate={autoRotate}
+              annotations={annotations}
+              onAnnotationFocus={handleDroneAnnotationFocus}
+              onDroneModeStopped={handleDroneModeStopped}
               onAnimationComplete={() => {
                 // Animation complete callback
               }}
@@ -1702,17 +1777,19 @@ export default function DarkEnhancedModelEditor({
               />
             </div>
 
-            {/* Annotations Menu Button - Bottom Right */}
-            <div className="absolute bottom-4 right-4">
+            {/* Annotations Menu Button - Bottom Left */}
+            <div className="absolute bottom-4 left-4">
               <button
                 onClick={() => setShowAnnotationsMenu(!showAnnotationsMenu)}
-                className="glass-button p-3 rounded-lg text-white hover:text-blue-400 transition-all duration-300"
+                className="glass-button p-4 rounded-lg text-white hover:text-blue-400 transition-all duration-300"
                 title="Show Annotations Menu"
               >
                 <img
                   src="/menu.svg"
                   alt="Menu"
-                  className="w-6 h-6"
+                  className={`w-8 h-8 transition-transform duration-300 ${
+                    showAnnotationsMenu ? 'rotate-90' : ''
+                  }`}
                   style={{
                     filter: 'brightness(0) saturate(100%) invert(100%)'
                   }}
@@ -1726,7 +1803,7 @@ export default function DarkEnhancedModelEditor({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute bottom-full right-0 mb-2 w-80"
+                  className="absolute bottom-full left-0 mb-2 w-80"
                   style={{
                     background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(10, 10, 10, 0.5) 100%)',
                     backdropFilter: 'blur(30px) saturate(180%)',
@@ -1759,8 +1836,11 @@ export default function DarkEnhancedModelEditor({
 
                   {/* Annotations List */}
                   <div className="max-h-96 overflow-y-auto">
-                    {annotations.filter(ann => ann.title || ann.description).length > 0 ? (
-                      annotations.filter(ann => ann.title || ann.description).map((annotation, index) => (
+                    {annotations.filter(ann => (ann.title || ann.description) && ann.menu_visible !== false).length > 0 ? (
+                      annotations
+                        .filter(ann => (ann.title || ann.description) && ann.menu_visible !== false)
+                        .sort((a, b) => (a.menu_order || 0) - (b.menu_order || 0))
+                        .map((annotation, index) => (
                         <button
                           key={annotation.id || index}
                           onClick={() => handleAnnotationMenuClick(annotation)}
@@ -1775,7 +1855,7 @@ export default function DarkEnhancedModelEditor({
                               textShadow: '0 0 10px rgba(255, 255, 255, 0.2)'
                             }}
                           >
-                            {annotation.title || annotation.object_name}
+                            {annotation.menu_name || annotation.title || annotation.object_name}
                           </div>
                           {annotation.description && (
                             <div className="text-gray-400 text-sm"
@@ -1864,6 +1944,8 @@ export default function DarkEnhancedModelEditor({
               setCameraTarget={setCameraTarget}
               cameraTarget={cameraTarget}
               autoRotate={autoRotate}
+              handleDroneAnnotationFocus={handleDroneAnnotationFocus}
+              handleDroneModeStopped={handleDroneModeStopped}
             />
             <ScreenPositionUpdater
               clickPosition={clickPosition}
@@ -1874,6 +1956,9 @@ export default function DarkEnhancedModelEditor({
               targetPosition={cameraTarget?.position || null}
               targetObject={cameraTarget?.object || null}
               autoRotate={autoRotate}
+              annotations={annotations}
+              onAnnotationFocus={handleDroneAnnotationFocus}
+              onDroneModeStopped={handleDroneModeStopped}
               onAnimationComplete={() => {
                 // Animation complete callback
               }}
@@ -1933,16 +2018,88 @@ export default function DarkEnhancedModelEditor({
           </div>
         </div>
 
-        {/* Viewer Info */}
-        <div className="absolute bottom-4 left-4 glass-panel rounded-lg px-3 py-2">
-          <div className="text-xs text-gray-400">
-            <div>Left Click: Select Object</div>
-            <div>Right Click: Rotate View</div>
-            <div>Scroll: Zoom</div>
-            <div>Middle Click: Pan</div>
-            <div>ESC: Deselect</div>
-            <div className="text-blue-400 mt-1">HUD Mode Active</div>
-          </div>
+        {/* Annotations Menu Button for Edit Mode - Bottom Left */}
+        <div className="absolute bottom-4 left-4">
+          <button
+            onClick={() => setShowAnnotationsMenu(!showAnnotationsMenu)}
+            className="glass-button p-4 rounded-lg text-white hover:text-blue-400 transition-all duration-300"
+            title="Show Annotations Menu"
+          >
+            <img
+              src="/menu.svg"
+              alt="Menu"
+              className={`w-8 h-8 transition-transform duration-300 ${
+                showAnnotationsMenu ? 'rotate-90' : ''
+              }`}
+              style={{
+                filter: 'brightness(0) saturate(100%) invert(100%)'
+              }}
+            />
+          </button>
+
+          {/* Annotations Dropdown Menu for Edit Mode */}
+          {showAnnotationsMenu && (
+            <motion.div
+              initial={{ opacity: 0, y: 10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="absolute bottom-full left-0 mb-2 w-96"
+              style={{
+                background: 'linear-gradient(135deg, rgba(0, 0, 0, 0.4) 0%, rgba(10, 10, 10, 0.5) 100%)',
+                backdropFilter: 'blur(30px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(30px) saturate(180%)',
+                borderRadius: '4px',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                boxShadow: `
+                  0 0 80px rgba(255, 255, 255, 0.1),
+                  0 0 160px rgba(255, 255, 255, 0.05),
+                  0 10px 40px rgba(0, 0, 0, 0.6),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.15)
+                `
+              }}
+            >
+              {/* Menu Header with Edit Controls */}
+              <div className="px-4 py-3 border-b border-white/10">
+                <div className="flex items-center justify-between">
+                  <h3
+                    className="text-white font-bold text-lg"
+                    style={{
+                      fontFamily: "'MocFont', Arial, sans-serif",
+                      direction: 'rtl',
+                      textAlign: 'right',
+                      textShadow: '0 0 20px rgba(255, 255, 255, 0.3)',
+                      letterSpacing: '0.5px',
+                      flex: 1
+                    }}
+                  >
+                    التعليقات التوضيحية
+                  </h3>
+                  <span className="text-xs text-gray-400 ml-2">Edit Mode</span>
+                </div>
+              </div>
+
+              {/* Annotations List with Edit Controls */}
+              {annotations.filter(ann => ann.title || ann.description).length > 0 ? (
+                <DraggableAnnotationsList
+                  annotations={annotations}
+                  onReorder={updateAnnotationMenuOrder}
+                  onToggleVisibility={toggleAnnotationMenuVisibility}
+                  onAnnotationClick={handleAnnotationMenuClick}
+                  onRename={handleAnnotationMenuRename}
+                />
+              ) : (
+                <div className="px-4 py-8 text-center text-gray-400">
+                  <p style={{
+                    fontFamily: "'MocFont', Arial, sans-serif",
+                    direction: 'rtl'
+                  }}>
+                    لا توجد تعليقات توضيحية
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          )}
         </div>
 
         {/* HUD Annotation Card - Fixed condition */}

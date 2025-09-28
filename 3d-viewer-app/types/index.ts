@@ -28,6 +28,10 @@ export interface Annotation {
   created_at: string;
   updated_at?: string;
   created_by?: string;
+  // Menu display properties
+  menu_visible?: boolean;
+  menu_order?: number;
+  menu_name?: string; // Custom name for menu display
 }
 
 export interface AnnotationInteraction {

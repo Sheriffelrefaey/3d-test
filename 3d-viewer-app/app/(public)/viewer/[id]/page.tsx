@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import type { Annotation } from '@/types';
 import { Maximize2, Home, Settings, X, Eye, EyeOff, RotateCw, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import LoaderScreen from '@/components/ui/LoaderScreen';
 
 const DarkEnhancedModelEditor = dynamic(() => import('@/components/3d/DarkEnhancedModelEditor'), {
   ssr: false,
@@ -41,6 +42,7 @@ export default function ViewerPage({ params }: ViewerPageProps) {
   const [showSidebar, setShowSidebar] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showLoader, setShowLoader] = useState(true);
 
   useEffect(() => {
     const fetchModel = async () => {
@@ -136,18 +138,9 @@ export default function ViewerPage({ params }: ViewerPageProps) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-gray-700 via-gray-800 to-gray-700">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading model...</p>
-        </div>
-      </div>
-    );
-  }
+  // Remove the old loading screen - we use the new LoaderScreen component now
 
-  if (error || !model) {
+  if (!loading && (error || !model)) {
     return (
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-gray-700 via-gray-800 to-gray-700">
         <div className="text-center">
@@ -165,15 +158,25 @@ export default function ViewerPage({ params }: ViewerPageProps) {
 
   return (
     <div className="h-screen w-full relative bg-black">
+      {/* Loader Screen */}
+      {(showLoader || loading) && (
+        <LoaderScreen
+          duration={7000}
+          onComplete={() => setShowLoader(false)}
+        />
+      )}
+
       {/* 3D Viewer - Full Screen */}
-      <DarkEnhancedModelEditor
-        modelUrl={model.file_url}
-        modelId={model.id}
-        annotations={annotations}
-        onAnnotationsChange={() => {}} // Read-only - no changes
-        onSave={() => {}} // Read-only - no save
-        readOnly={true} // Add this prop to disable editing
-      />
+      {model && !loading && (
+        <DarkEnhancedModelEditor
+          modelUrl={model.file_url}
+          modelId={model.id}
+          annotations={annotations}
+          onAnnotationsChange={() => {}} // Read-only - no changes
+          onSave={() => {}} // Read-only - no save
+          readOnly={true} // Add this prop to disable editing
+        />
+      )}
     </div>
   );
 }
