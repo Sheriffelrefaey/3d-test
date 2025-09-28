@@ -1,0 +1,15 @@
+{
+  "name": "3d-test-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "cd 3d-viewer-app && npm run dev",
+    "build": "cd 3d-viewer-app && npm run build",
+    "start": "cd 3d-viewer-app && npm run start",
+    "lint": "cd 3d-viewer-app && npm run lint",
+    "install": "cd 3d-viewer-app && npm install"
+  },
+  "dependencies": {
+    "next": "15.5.4"
+  }
+}
