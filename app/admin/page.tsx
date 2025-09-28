@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
-import { Plus, Eye, Edit, Trash2, Search, Grid, List, Upload as UploadIcon, Calendar, FileBox, Box, MessageSquare } from 'lucide-react';
+import { Plus, Eye, Edit, Trash2, Search, Grid, List, Calendar, FileBox, Box, MessageSquare } from 'lucide-react';
 import UploadModal from '@/components/ui/UploadModal';
 import type { Model } from '@/types';
 import { supabase } from '@/lib/supabase/client';
@@ -48,402 +48,362 @@ export default function AdminPage() {
         .eq('type', 'view');
 
       // Calculate storage usage from models
-      let totalSize = 0;
-
-      // If we have models with file_size, use that
-      const { data: modelsWithSize, error: _sizeError } = await supabase
-        .from('models')
-        .select('*');
-
-      if (modelsWithSize) {
-        totalSize = modelsWithSize.reduce((sum, model) => {
-          return sum + (model.file_size || 0);
-        }, 0);
-        // Convert bytes to MB
-        totalSize = totalSize / (1024 * 1024);
-      } else {
-        // Fallback estimate
-        totalSize = models.length * 5; // Estimate 5MB per model
-      }
+      const totalStorage = modelsList.reduce((acc, model) => acc + (model.file_size || 0), 0);
 
       setStats({
         totalModels: modelsList.length,
         totalViews: viewCount || 0,
         totalAnnotations: annotationCount || 0,
-        storageUsed: totalSize,
+        storageUsed: totalStorage,
       });
     } catch (error) {
-      console.error('Failed to fetch statistics:', error);
+      console.error('Error fetching statistics:', error);
     }
   };
 
   const fetchModels = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/models');
-      if (response.ok) {
-        const data = await response.json();
-        setModels(data);
+      const { data, error } = await supabase
+        .from('models')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-        // Update model count in stats
-        setStats(prev => ({ ...prev, totalModels: data.length }));
-
-        // Fetch other statistics after models are loaded
-        fetchStatistics(data);
-      } else {
-        setModels([]);
-        fetchStatistics([]);
-      }
+      if (error) throw error;
+      setModels(data || []);
+      await fetchStatistics(data || []);
     } catch (error) {
-      console.error('Failed to fetch models:', error);
-      setModels([]);
-      fetchStatistics([]);
+      console.error('Error fetching models:', error);
+      toast.error('Failed to load models');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    // No confirmation, delete immediately with toast
-    const modelToDelete = models.find(m => m.id === id);
-    const modelName = modelToDelete?.name || 'Model';
+  const handleDeleteModel = async (modelId: string) => {
+    // eslint-disable-next-line no-alert
+    const userConfirmed = window.confirm('Are you sure you want to delete this model?');
+    if (!userConfirmed) return;
 
     try {
-      const response = await fetch(`/api/models?id=${id}`, {
-        method: 'DELETE',
-      });
+      const { error } = await supabase
+        .from('models')
+        .delete()
+        .eq('id', modelId);
 
-      if (response.ok) {
-        setModels(models.filter(m => m.id !== id));
-        // Update stats
-        setStats(prev => ({
-          ...prev,
-          totalModels: prev.totalModels - 1,
-          storageUsed: Math.max(0, prev.storageUsed - 5) // Rough estimate
-        }));
-        toast.success(`"${modelName}" has been deleted`, {
-          position: 'bottom-left',
-          duration: 3000,
-        });
-      } else {
-        console.error('Failed to delete model');
-        toast.error('Failed to delete model', {
-          position: 'bottom-left',
-          duration: 4000,
-        });
-      }
+      if (error) throw error;
+
+      toast.success('Model deleted successfully');
+      fetchModels();
     } catch (error) {
-      console.error('Failed to delete model:', error);
-      toast.error('An error occurred while deleting the model', {
-        position: 'bottom-left',
-        duration: 4000,
-      });
+      console.error('Error deleting model:', error);
+      toast.error('Failed to delete model');
     }
   };
 
-  const filteredModels = models.filter(model =>
-    model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    model.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const handleUploadSuccess = () => {
+    fetchModels();
+    setIsUploadModalOpen(false);
+  };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleDateString('en-US', {
       year: 'numeric',
+      month: 'short',
+      day: 'numeric'
     });
   };
 
-  const formatStorageSize = (mb: number) => {
-    if (mb < 1) return '0 MB';
-    if (mb < 1024) return `${mb.toFixed(1)} MB`;
-    return `${(mb / 1024).toFixed(2)} GB`;
-  };
-
-  // Placeholder component for missing thumbnails
-  const ModelThumbnail = ({ model }: { model: Model }) => {
-    const colors = ['from-purple-600 to-blue-600', 'from-green-600 to-cyan-600', 'from-orange-600 to-pink-600'];
-    const colorIndex = parseInt(model.id, 36) % colors.length;
-
-    return (
-      <div className={`w-full h-full bg-gradient-to-br ${colors[colorIndex]} flex items-center justify-center`}>
-        <Box className="w-12 h-12 text-white/80" />
-      </div>
-    );
-  };
+  const filteredModels = models.filter(model =>
+    model.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <>
-      <div className="min-h-screen relative">
-      {/* Background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-cyan-900/20" />
+    <div className="min-h-screen bg-gray-900 text-white">
+      <Toaster position="top-right" />
 
-      <div className="relative z-10">
-        {/* Header */}
-        <div className="glass-dark border-b border-white/10">
-          <div className="container mx-auto px-4 py-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text text-transparent">
-                  Admin Dashboard
-                </h1>
-                <p className="text-gray-400 mt-1">Manage your 3D models and annotations</p>
-              </div>
-              <button
-                onClick={() => router.push('/')}
-                className="glass rounded-lg px-4 py-2 text-gray-300 hover:text-white transition-colors"
-              >
-                ← Back to Home
-              </button>
-            </div>
-          </div>
-        </div>
+      <div className="relative">
+        {/* Subtle grid background */}
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage: `linear-gradient(90deg, #ffffff 1px, transparent 1px), linear-gradient(180deg, #ffffff 1px, transparent 1px)`,
+            backgroundSize: '50px 50px'
+          }}
+        />
 
-        {/* Stats */}
-        <div className="container mx-auto px-4 py-8">
-          <div className="grid md:grid-cols-4 gap-6 mb-8">
-            <div className="glass rounded-xl p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-400">Total Models</span>
-                <FileBox className="w-5 h-5 text-purple-400" />
-              </div>
-              <p className="text-3xl font-bold text-white">{stats.totalModels}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                {stats.totalModels === 0 ? 'No models yet' : 'In your library'}
-              </p>
-            </div>
-            <div className="glass rounded-xl p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-400">Total Views</span>
-                <Eye className="w-5 h-5 text-blue-400" />
-              </div>
-              <p className="text-3xl font-bold text-white">{stats.totalViews}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                {stats.totalViews === 0 ? 'No views yet' : 'All time'}
-              </p>
-            </div>
-            <div className="glass rounded-xl p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-400">Annotations</span>
-                <MessageSquare className="w-5 h-5 text-green-400" />
-              </div>
-              <p className="text-3xl font-bold text-white">{stats.totalAnnotations}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                {stats.totalAnnotations === 0 ? 'No annotations' : 'Across all models'}
-              </p>
-            </div>
-            <div className="glass rounded-xl p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-400">Storage Used</span>
-                <UploadIcon className="w-5 h-5 text-orange-400" />
-              </div>
-              <p className="text-3xl font-bold text-white">{formatStorageSize(stats.storageUsed)}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                {stats.storageUsed === 0 ? 'Empty' : 'Estimated usage'}
-              </p>
-            </div>
-          </div>
-
-          {/* Toolbar */}
-          <div className="flex flex-col md:flex-row gap-4 mb-8">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search models..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 rounded-lg glass border border-gray-700 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none transition-colors"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-3 rounded-lg transition-all ${
-                  viewMode === 'grid'
-                    ? 'glass bg-purple-500/20 text-purple-400 border border-purple-500/50'
-                    : 'glass text-gray-400 hover:text-white'
-                }`}
-              >
-                <Grid className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-3 rounded-lg transition-all ${
-                  viewMode === 'list'
-                    ? 'glass bg-purple-500/20 text-purple-400 border border-purple-500/50'
-                    : 'glass text-gray-400 hover:text-white'
-                }`}
-              >
-                <List className="w-5 h-5" />
-              </button>
-            </div>
-            <button
-              onClick={() => setIsUploadModalOpen(true)}
-              className="px-6 py-3 rounded-lg bg-gradient-to-r from-purple-500 to-cyan-500 text-white font-semibold hover:from-purple-600 hover:to-cyan-600 transition-all flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Upload Model
-            </button>
-          </div>
-
-          {/* Models Grid/List */}
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="inline-flex items-center gap-2 text-gray-400">
-                <div className="w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                Loading models...
-              </div>
-            </div>
-          ) : filteredModels.length === 0 ? (
-            <div className="glass rounded-2xl p-12 text-center">
-              <FileBox className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-              <h3 className="text-xl font-semibold text-white mb-2">
-                {searchTerm ? 'No models found' : 'No models uploaded yet'}
-              </h3>
-              <p className="text-gray-400 mb-6">
-                {searchTerm ? 'Try adjusting your search terms' : 'Upload your first 3D model to get started'}
-              </p>
-              {!searchTerm && (
+        <div className="relative z-10">
+          {/* Header */}
+          <header className="border-b border-gray-700">
+            <div className="container mx-auto px-6 py-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-light">
+                    <span className="bg-gradient-to-r from-white to-gray-200 bg-clip-text text-transparent">
+                      Model Dashboard
+                    </span>
+                  </h1>
+                  <p className="text-gray-400 text-sm mt-1">Manage your 3D models and configurations</p>
+                </div>
                 <button
                   onClick={() => setIsUploadModalOpen(true)}
-                  className="px-6 py-3 rounded-lg bg-gradient-to-r from-purple-500 to-cyan-500 text-white font-semibold hover:from-purple-600 hover:to-cyan-600 transition-all inline-flex items-center gap-2"
+                  className="flex items-center gap-2 px-4 py-2 bg-white text-gray-900 rounded-lg hover:bg-gray-100 transition-all duration-200 font-medium"
                 >
-                  <Plus className="w-5 h-5" />
-                  Upload Your First Model
+                  <Plus size={18} strokeWidth={1.5} />
+                  <span className="font-light">Upload Model</span>
                 </button>
-              )}
+              </div>
             </div>
-          ) : viewMode === 'grid' ? (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredModels.map((model) => (
-                <div key={model.id} className="glass rounded-xl overflow-hidden group hover:scale-[1.02] transition-transform">
-                  <div className="aspect-video relative overflow-hidden">
-                    <ModelThumbnail model={model} />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          </header>
+
+          {/* Statistics */}
+          <div className="container mx-auto px-6 py-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+                    <Box size={20} className="text-gray-400" strokeWidth={1} />
                   </div>
-                  <div className="p-6">
-                    <h3 className="text-lg font-semibold text-white mb-2">{model.name}</h3>
-                    <p className="text-gray-400 text-sm mb-4 line-clamp-2">
-                      {model.description || 'No description'}
-                    </p>
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {formatDate(model.created_at)}
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => window.open(`/viewer/${model.id}`, '_blank')}
-                        className="flex-1 py-2 rounded-lg bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/50 text-blue-400 hover:from-blue-500/30 hover:to-cyan-500/30 transition-all flex items-center justify-center gap-1 font-medium"
-                        title="Preview in new tab"
-                      >
-                        <Eye className="w-4 h-4" />
-                        Preview
-                      </button>
-                      <button
-                        onClick={() => router.push(`/admin/edit/${model.id}`)}
-                        className="flex-1 py-2 rounded-lg glass border border-purple-500/50 text-purple-400 hover:bg-purple-500/10 transition-all flex items-center justify-center gap-1"
-                      >
-                        <Edit className="w-4 h-4" />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(model.id)}
-                        className="py-2 px-3 rounded-lg glass border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-all"
-                        title="Delete model"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                  <div>
+                    <p className="text-2xl font-light text-white">{stats.totalModels}</p>
+                    <p className="text-xs text-gray-500">Total Models</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredModels.map((model) => (
-                <div key={model.id} className="glass rounded-xl p-6 flex items-center gap-6">
-                  <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-                    <ModelThumbnail model={model} />
+              </div>
+
+              <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+                    <Eye size={20} className="text-gray-400" strokeWidth={1} />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-white mb-1">{model.name}</h3>
-                    <p className="text-gray-400 text-sm mb-2">
-                      {model.description || 'No description'}
-                    </p>
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {formatDate(model.created_at)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => window.open(`/viewer/${model.id}`, '_blank')}
-                      className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border border-blue-500/50 text-blue-400 hover:from-blue-500/30 hover:to-cyan-500/30 transition-all flex items-center gap-2 font-medium"
-                      title="Preview in new tab"
-                    >
-                      <Eye className="w-4 h-4" />
-                      Preview
-                    </button>
-                    <button
-                      onClick={() => router.push(`/admin/edit/${model.id}`)}
-                      className="px-4 py-2 rounded-lg glass border border-purple-500/50 text-purple-400 hover:bg-purple-500/10 transition-all flex items-center gap-2"
-                    >
-                      <Edit className="w-4 h-4" />
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(model.id)}
-                      className="p-2 rounded-lg glass border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-all"
-                      title="Delete model"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  <div>
+                    <p className="text-2xl font-light text-white">{stats.totalViews}</p>
+                    <p className="text-xs text-gray-500">Total Views</p>
                   </div>
                 </div>
-              ))}
+              </div>
+
+              <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+                    <MessageSquare size={20} className="text-gray-400" strokeWidth={1} />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-light text-white">{stats.totalAnnotations}</p>
+                    <p className="text-xs text-gray-500">Annotations</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+                    <FileBox size={20} className="text-gray-400" strokeWidth={1} />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-light text-white">{formatFileSize(stats.storageUsed)}</p>
+                    <p className="text-xs text-gray-500">Storage Used</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+
+            {/* Search and View Controls */}
+            <div className="flex items-center justify-between mb-8">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 w-4 h-4" strokeWidth={1} />
+                <input
+                  type="text"
+                  placeholder="Search models..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:border-gray-500 transition-colors"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-2 rounded-lg transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-gray-700 text-white'
+                      : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  <Grid size={18} strokeWidth={1} />
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-2 rounded-lg transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-gray-700 text-white'
+                      : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  <List size={18} strokeWidth={1} />
+                </button>
+              </div>
+            </div>
+
+            {/* Models Display */}
+            {loading ? (
+              <div className="text-center py-12">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400"></div>
+                <p className="text-gray-400 mt-4">Loading models...</p>
+              </div>
+            ) : filteredModels.length === 0 ? (
+              <div className="text-center py-12">
+                <Box className="w-16 h-16 text-gray-600 mx-auto mb-4" strokeWidth={1} />
+                <p className="text-gray-400 mb-4">No models found</p>
+                <button
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  Upload your first model →
+                </button>
+              </div>
+            ) : viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredModels.map((model) => (
+                  <div
+                    key={model.id}
+                    className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg overflow-hidden hover:border-gray-500 transition-all duration-200 group"
+                  >
+                    <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-900 relative">
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Box className="w-12 h-12 text-gray-700" strokeWidth={1} />
+                      </div>
+                      {model.thumbnail_url && (
+                        <img
+                          src={model.thumbnail_url}
+                          alt={model.name}
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <h3 className="font-light text-gray-200 truncate mb-2">{model.name}</h3>
+                      <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
+                        <Calendar size={12} strokeWidth={1} />
+                        <span>{formatDate(model.created_at)}</span>
+                        <span className="ml-auto">{formatFileSize(model.file_size || 0)}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => router.push(`/viewer/${model.id}`)}
+                          className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 border border-gray-600 text-gray-300 rounded hover:bg-gray-700 hover:text-white transition-colors"
+                        >
+                          <Eye size={14} strokeWidth={1} />
+                          <span className="text-xs">View</span>
+                        </button>
+                        <button
+                          onClick={() => router.push(`/admin/edit/${model.id}`)}
+                          className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 border border-gray-600 text-gray-300 rounded hover:bg-gray-700 hover:text-white transition-colors"
+                        >
+                          <Edit size={14} strokeWidth={1} />
+                          <span className="text-xs">Edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteModel(model.id)}
+                          className="px-3 py-1.5 border border-gray-600 text-gray-400 rounded hover:bg-red-900/30 hover:border-red-800 hover:text-red-400 transition-colors"
+                        >
+                          <Trash2 size={14} strokeWidth={1} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-700">
+                      <th className="text-left py-3 px-4 font-light text-gray-400 text-sm">Name</th>
+                      <th className="text-left py-3 px-4 font-light text-gray-400 text-sm">Date</th>
+                      <th className="text-left py-3 px-4 font-light text-gray-400 text-sm">Size</th>
+                      <th className="text-right py-3 px-4 font-light text-gray-400 text-sm">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredModels.map((model) => (
+                      <tr
+                        key={model.id}
+                        className="border-b border-gray-700/50 hover:bg-gray-800/30 transition-colors"
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center">
+                              <Box size={16} className="text-gray-600" strokeWidth={1} />
+                            </div>
+                            <span className="text-gray-200 font-light">{model.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-gray-500 text-sm">
+                          {formatDate(model.created_at)}
+                        </td>
+                        <td className="py-3 px-4 text-gray-500 text-sm">
+                          {formatFileSize(model.file_size || 0)}
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => router.push(`/viewer/${model.id}`)}
+                              className="p-1.5 text-gray-500 hover:text-white transition-colors"
+                              title="View"
+                            >
+                              <Eye size={16} strokeWidth={1} />
+                            </button>
+                            <button
+                              onClick={() => router.push(`/admin/edit/${model.id}`)}
+                              className="p-1.5 text-gray-500 hover:text-white transition-colors"
+                              title="Edit"
+                            >
+                              <Edit size={16} strokeWidth={1} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteModel(model.id)}
+                              className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 size={16} strokeWidth={1} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <footer className="mt-16 border-t border-gray-700 pt-8 pb-4">
+            <div className="text-center">
+              <p className="text-gray-500 text-sm font-light">
+                Powered by <span className="text-gray-300">Weventures AI</span>
+              </p>
+            </div>
+          </footer>
         </div>
       </div>
 
       {/* Upload Modal */}
-      <UploadModal isOpen={isUploadModalOpen} onClose={() => {
-        setIsUploadModalOpen(false);
-        fetchModels(); // Refresh the list after upload
-        fetchStatistics(); // Update statistics
-      }} />
-      </div>
-
-      {/* Toast Notifications */}
-      <Toaster
-        toastOptions={{
-          className: '',
-          style: {
-            background: 'rgba(17, 24, 39, 0.95)',
-            color: '#fff',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: '8px',
-          },
-          success: {
-            iconTheme: {
-              primary: '#10b981',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#fff',
-            },
-          },
-        }}
-      />
-    </>
+      {isUploadModalOpen && (
+        <UploadModal
+          isOpen={isUploadModalOpen}
+          onClose={() => setIsUploadModalOpen(false)}
+          onSuccess={handleUploadSuccess}
+        />
+      )}
+    </div>
   );
 }

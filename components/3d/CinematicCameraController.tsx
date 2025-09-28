@@ -41,7 +41,7 @@ export default function CinematicCameraController({
     waitingForHUD: false,
     hudDisplayTime: 0,
     lastMoveTime: 0,
-    HUD_DISPLAY_DURATION: 8000, // Wait 8 seconds for HUD text to complete
+    HUD_DISPLAY_DURATION: 4000, // Wait 4 seconds for HUD text to complete
     MOVE_DELAY: 1500 // 1.5 second delay before starting next move
   });
 

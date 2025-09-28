@@ -7,9 +7,10 @@ import Modal from './Modal';
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
 }
 
-export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
+export default function UploadModal({ isOpen, onClose, onSuccess }: UploadModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -79,6 +80,10 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
         await response.json();
         resetForm();
         onClose();
+        // Call onSuccess callback if provided
+        if (onSuccess) {
+          onSuccess();
+        }
         // Don't navigate away, let the user stay on admin page
         // router.push(`/viewer/${data.id}`);
       } else {
