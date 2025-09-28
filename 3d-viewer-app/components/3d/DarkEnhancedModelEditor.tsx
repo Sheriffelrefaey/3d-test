@@ -1625,43 +1625,57 @@ export default function DarkEnhancedModelEditor({
 
         {/* Floating Controls for Viewer */}
         {readOnly && (
-          <div className="absolute top-4 left-4 flex flex-col gap-2">
-            {/* Reset View Button */}
-            <button
-              onClick={handleResetView}
-              className="glass-button p-2 rounded-lg text-white hover:text-blue-400 transition-colors"
-              title="Reset View"
-            >
-              <RotateCcw size={20} />
-            </button>
+          <>
+            <div className="absolute top-4 left-4 flex flex-col gap-2">
+              {/* Reset View Button */}
+              <button
+                onClick={handleResetView}
+                className="glass-button p-2 rounded-lg text-white hover:text-blue-400 transition-colors"
+                title="Reset View"
+              >
+                <RotateCcw size={20} />
+              </button>
 
-            {/* Drone Mode Toggle - Cinematic Auto-Rotate */}
-            <button
-              onClick={() => setAutoRotate(!autoRotate)}
-              className={`glass-button p-2 rounded-lg transition-all duration-300 ${
-                autoRotate
-                  ? 'text-blue-400 bg-blue-500/20 shadow-lg shadow-blue-500/30 animate-pulse'
-                  : 'text-white hover:text-blue-400'
-              }`}
-              title={autoRotate ? 'Stop Drone Mode' : 'Start Drone Mode (Auto-Rotate)'}
-            >
-              <Plane
-                size={20}
-                className={`transition-transform duration-500 ${
-                  autoRotate ? 'rotate-45' : ''
+              {/* Drone Mode Toggle - Cinematic Auto-Rotate */}
+              <button
+                onClick={() => setAutoRotate(!autoRotate)}
+                className={`glass-button p-2 rounded-lg transition-all duration-300 ${
+                  autoRotate
+                    ? 'text-blue-400 bg-blue-500/20 shadow-lg shadow-blue-500/30 animate-pulse'
+                    : 'text-white hover:text-blue-400'
                 }`}
-              />
-            </button>
+                title={autoRotate ? 'Stop Drone Mode' : 'Start Drone Mode (Auto-Rotate)'}
+              >
+                <Plane
+                  size={20}
+                  className={`transition-transform duration-500 ${
+                    autoRotate ? 'rotate-45' : ''
+                  }`}
+                />
+              </button>
 
-            {/* Fullscreen Toggle */}
-            <button
-              onClick={toggleFullscreen}
-              className="glass-button p-2 rounded-lg text-white hover:text-blue-400 transition-colors"
-              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-            >
-              {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-            </button>
-          </div>
+              {/* Fullscreen Toggle */}
+              <button
+                onClick={toggleFullscreen}
+                className="glass-button p-2 rounded-lg text-white hover:text-blue-400 transition-colors"
+                title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              >
+                {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+              </button>
+            </div>
+
+            {/* Logo in top right corner */}
+            <div className="absolute top-4 right-4">
+              <img
+                src="/logo.png"
+                alt="Logo"
+                className="h-16 w-auto object-contain opacity-90 hover:opacity-100 transition-opacity duration-300"
+                style={{
+                  filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5))'
+                }}
+              />
+            </div>
+          </>
         )}
 
         {/* HUD Annotation Card for read-only viewer */}
