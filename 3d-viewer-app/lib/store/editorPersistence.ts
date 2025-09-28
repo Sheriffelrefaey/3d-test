@@ -82,6 +82,12 @@ export async function saveTransforms(transforms: ObjectTransform[]) {
   const uniqueTransforms = new Map<string, ObjectTransform>();
 
   transforms.forEach(transform => {
+    // Skip transforms without object_name
+    if (!transform.object_name) {
+      console.warn('Skipping transform without object_name:', transform);
+      return;
+    }
+
     // Ensure all required fields are present
     const validTransform: any = {
       model_id: modelId,

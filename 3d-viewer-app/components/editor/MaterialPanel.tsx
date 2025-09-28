@@ -360,6 +360,30 @@ export default function MaterialPanel({
                   description={`${((material.texture_settings.rotation || 0) * 180 / Math.PI).toFixed(1)}°`}
                 />
 
+                {/* Quick Repeat Presets */}
+                <div className="mb-3">
+                  <label className="text-xs text-gray-400 mb-2 block">Quick Tiling Presets</label>
+                  <div className="flex gap-1">
+                    {[1, 10, 100, 500, 1000, 5000].map(value => (
+                      <button
+                        key={value}
+                        onClick={() => {
+                          onChange({
+                            ...material,
+                            texture_settings: {
+                              ...material.texture_settings!,
+                              repeat: { x: value, y: value }
+                            }
+                          });
+                        }}
+                        className="flex-1 py-1 px-2 text-xs glass-button rounded hover:bg-blue-500/20"
+                      >
+                        {value}×
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Texture Repeat X */}
                 <PropertySlider
                   label="Repeat X"
@@ -377,9 +401,9 @@ export default function MaterialPanel({
                     });
                   }}
                   min={0.1}
-                  max={10}
+                  max={10000}
                   step={0.1}
-                  description="Horizontal tiling"
+                  description="Horizontal tiling (0.1 - 10k)"
                 />
 
                 {/* Texture Repeat Y */}
@@ -399,9 +423,9 @@ export default function MaterialPanel({
                     });
                   }}
                   min={0.1}
-                  max={10}
+                  max={10000}
                   step={0.1}
-                  description="Vertical tiling"
+                  description="Vertical tiling (0.1 - 10k)"
                 />
 
                 {/* Texture Offset X */}

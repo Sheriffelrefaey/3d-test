@@ -3,22 +3,65 @@
 import React, { useRef, useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { useEditorStore } from '@/lib/store/editorStore';
+import type { ObjectMaterial } from '@/types';
+
+type GroundPlaneEventHandler = (event: any, mesh: THREE.Mesh) => void;
+
+interface InfiniteGroundPlaneProps {
+  color?: string;
+  gridColor?: string;
+  readOnly?: boolean;
+  showGrid?: boolean;
+  onSelect?: GroundPlaneEventHandler;
+  onPointerOver?: GroundPlaneEventHandler;
+  onPointerOut?: GroundPlaneEventHandler;
+  onContextMenu?: GroundPlaneEventHandler;
+}
 
 // Global texture cache to prevent reloading
 const textureCache = new Map<string, THREE.Texture>();
+
+const wrapModeMap = {
+  repeat: THREE.RepeatWrapping,
+  mirror: THREE.MirroredRepeatWrapping,
+  clamp: THREE.ClampToEdgeWrapping
+} as const;
+
+const applyTextureSettings = (
+  texture: THREE.Texture,
+  settings: ObjectMaterial['texture_settings']
+) => {
+  if (!texture) return;
+
+  const repeat = settings?.repeat ?? settings?.scale;
+  const offset = settings?.offset;
+  const rotation = settings?.rotation ?? 0;
+
+  texture.repeat.set(repeat?.x ?? 1, repeat?.y ?? 1);
+  texture.offset.set(offset?.x ?? 0, offset?.y ?? 0);
+  texture.center.set(0.5, 0.5);
+  texture.rotation = rotation;
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  const wrapS = settings?.wrapS ? wrapModeMap[settings.wrapS] : THREE.RepeatWrapping;
+  const wrapT = settings?.wrapT ? wrapModeMap[settings.wrapT] : THREE.RepeatWrapping;
+  texture.wrapS = wrapS;
+  texture.wrapT = wrapT;
+
+  texture.needsUpdate = true;
+};
 
 // Create infinite ground plane
 export default function InfiniteGroundPlane({
   color = '#0a0a0a',
   gridColor = '#1a1a1a',
   readOnly = false,
-  showGrid = true
-}: {
-  color?: string;
-  gridColor?: string;
-  readOnly?: boolean;
-  showGrid?: boolean;
-}) {
+  showGrid = true,
+  onSelect,
+  onPointerOver,
+  onPointerOut,
+  onContextMenu
+}: InfiniteGroundPlaneProps) {
   const materials = useEditorStore(state => state.materials);
   const transforms = useEditorStore(state => state.transforms);
   const groundMaterial = materials.get('Plane12847');
@@ -33,7 +76,11 @@ export default function InfiniteGroundPlane({
       // Check cache first
       const cached = textureCache.get(groundMaterial.texture_url);
       if (cached) {
-        setTexture(cached);
+        const configuredTexture = cached.clone();
+        configuredTexture.image = cached.image;
+        configuredTexture.anisotropy = cached.anisotropy;
+        applyTextureSettings(configuredTexture, groundMaterial.texture_settings);
+        setTexture(configuredTexture);
         setIsLoadingTexture(false);
         return;
       }
@@ -46,15 +93,15 @@ export default function InfiniteGroundPlane({
       loader.load(
         groundMaterial.texture_url,
         (loadedTexture) => {
-          loadedTexture.wrapS = THREE.RepeatWrapping;
-          loadedTexture.wrapT = THREE.RepeatWrapping;
-          loadedTexture.repeat.set(100, 100);
           loadedTexture.anisotropy = 16;
-          loadedTexture.needsUpdate = true;
-
-          // Cache it
           textureCache.set(groundMaterial.texture_url!, loadedTexture);
-          setTexture(loadedTexture);
+
+          const configuredTexture = loadedTexture.clone();
+          configuredTexture.image = loadedTexture.image;
+          configuredTexture.anisotropy = loadedTexture.anisotropy;
+          applyTextureSettings(configuredTexture, groundMaterial.texture_settings);
+
+          setTexture(configuredTexture);
           setIsLoadingTexture(false);
           console.log('Ground texture loaded:', groundMaterial.texture_url);
         },
@@ -71,7 +118,16 @@ export default function InfiniteGroundPlane({
         setTexture(null);
       }
     }
-  }, [groundMaterial?.texture_url]);
+  }, [groundMaterial?.texture_url, groundMaterial?.texture_settings]);
+
+  useEffect(() => {
+    if (texture && groundMaterial?.texture_settings) {
+      applyTextureSettings(texture, groundMaterial.texture_settings);
+      if (meshRef.current?.material instanceof THREE.MeshStandardMaterial) {
+        meshRef.current.material.needsUpdate = true;
+      }
+    }
+  }, [texture, groundMaterial?.texture_settings]);
 
   // Create material - use previous material while loading
   const material = useMemo(() => {
@@ -128,8 +184,35 @@ export default function InfiniteGroundPlane({
         position={[0, -0.01, 0]}
         scale={[scale.x, scale.y, scale.z]}
         material={material}
-        raycast={() => {}}
-        userData={{ nonInteractive: true, isGroundPlane: true }}
+        userData={{ isGroundPlane: true, isSelectable: true, isModelPlane: true }}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (readOnly) return;
+          if (meshRef.current) {
+            onSelect?.(event, meshRef.current);
+          }
+        }}
+        onContextMenu={(event) => {
+          event.stopPropagation();
+          if (readOnly) return;
+          if (meshRef.current) {
+            onContextMenu?.(event, meshRef.current);
+          }
+        }}
+        onPointerOver={(event) => {
+          event.stopPropagation();
+          if (readOnly) return;
+          if (meshRef.current) {
+            onPointerOver?.(event, meshRef.current);
+          }
+        }}
+        onPointerOut={(event) => {
+          event.stopPropagation();
+          if (readOnly) return;
+          if (meshRef.current) {
+            onPointerOut?.(event, meshRef.current);
+          }
+        }}
         receiveShadow
       >
         <planeGeometry args={[100, 100, 1, 1]} />

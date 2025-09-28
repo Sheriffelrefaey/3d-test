@@ -88,6 +88,8 @@ export default function ObjectHierarchyPanel({
   const [renamingItem, setRenamingItem] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [userGroups, setUserGroups] = useState<Map<string, string[]>>(new Map());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number>(-1);
+  const flatItemsRef = useRef<MeshItem[]>([]);
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -196,6 +198,23 @@ export default function ObjectHierarchyPanel({
     return rootItems;
   }, [meshes, transforms]);
 
+  // Create flat list of all items for range selection
+  useEffect(() => {
+    const flatList: MeshItem[] = [];
+
+    const addToFlatList = (items: MeshItem[]) => {
+      items.forEach(item => {
+        flatList.push(item);
+        if (item.children && item.children.length > 0) {
+          addToFlatList(item.children);
+        }
+      });
+    };
+
+    addToFlatList(hierarchy);
+    flatItemsRef.current = flatList;
+  }, [hierarchy]);
+
   // Filter hierarchy based on search
   const filteredHierarchy = useMemo(() => {
     if (!searchTerm) return hierarchy;
@@ -253,12 +272,38 @@ export default function ObjectHierarchyPanel({
     toast.success(`Deleted ${children ? 'group' : 'object'} "${name}"`);
   };
 
-  // Handle item selection
+  // Handle item selection with range selection support
   const handleItemClick = useCallback((e: React.MouseEvent, item: MeshItem) => {
     e.stopPropagation();
 
-    if (e.shiftKey || e.metaKey || e.ctrlKey) {
-      // Multi-select mode
+    // Find the index of the clicked item in the flat list
+    const clickedIndex = flatItemsRef.current.findIndex(i => i.name === item.name);
+
+    if (e.shiftKey && lastSelectedIndex !== -1 && clickedIndex !== -1) {
+      // Shift+Click: Range selection
+      const startIndex = Math.min(lastSelectedIndex, clickedIndex);
+      const endIndex = Math.max(lastSelectedIndex, clickedIndex);
+      const newSelected = new Set(selectedItems);
+
+      // Select all items between start and end (inclusive)
+      for (let i = startIndex; i <= endIndex; i++) {
+        const itemToSelect = flatItemsRef.current[i];
+        if (itemToSelect && !itemToSelect.deleted) {
+          newSelected.add(itemToSelect.name);
+          // If it's a group, also add its children
+          if (itemToSelect.children && itemToSelect.isUserGroup) {
+            itemToSelect.children.forEach(child => {
+              if (!child.deleted) newSelected.add(child.name);
+            });
+          }
+        }
+      }
+
+      setSelectedItems(newSelected);
+      onSelectMultipleMeshes?.(Array.from(newSelected));
+      // Don't update lastSelectedIndex on shift+click to allow extending selection
+    } else if (e.metaKey || e.ctrlKey) {
+      // Ctrl/Cmd+Click: Toggle selection
       const newSelected = new Set(selectedItems);
 
       if (item.type === 'group' && item.children && item.isUserGroup) {
@@ -284,6 +329,7 @@ export default function ObjectHierarchyPanel({
 
       setSelectedItems(newSelected);
       onSelectMultipleMeshes?.(Array.from(newSelected));
+      setLastSelectedIndex(clickedIndex); // Update for future shift+click
     } else {
       // Single select
       if (item.type === 'group' && item.children && item.isUserGroup) {
@@ -295,8 +341,9 @@ export default function ObjectHierarchyPanel({
         setSelectedItems(new Set([item.name]));
         onSelectMesh(item.name);
       }
+      setLastSelectedIndex(clickedIndex); // Update for future shift+click
     }
-  }, [selectedItems, onSelectMesh, onSelectMultipleMeshes]);
+  }, [selectedItems, onSelectMesh, onSelectMultipleMeshes, lastSelectedIndex]);
 
   // Handle right-click context menu
   const handleContextMenu = useCallback((e: React.MouseEvent, item: MeshItem) => {

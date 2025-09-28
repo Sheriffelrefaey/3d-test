@@ -68,10 +68,15 @@ export interface Vector3 {
   z: number;
 }
 
+export type TextureWrapMode = 'repeat' | 'mirror' | 'clamp';
+
 export interface TextureSettings {
-  scale: Vector2;
-  offset: Vector2;
-  rotation: number;
+  scale?: Vector2;
+  repeat?: Vector2;
+  offset?: Vector2;
+  rotation?: number;
+  wrapS?: TextureWrapMode;
+  wrapT?: TextureWrapMode;
 }
 
 export interface MaterialProperties {
@@ -111,7 +116,7 @@ export interface ObjectMaterial {
   preset_name?: MaterialPreset;
   color: Color;
   texture_url?: string;
-  texture_settings?: TextureSettings;
+  texture_settings?: TextureSettings | null;
   properties: MaterialProperties;
   created_at?: string;
   updated_at?: string;

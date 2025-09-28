@@ -70,7 +70,7 @@ export function HUDAnnotationCard({ annotation, screenPosition, onClose, isVisib
         setShowText(true);
 
         // Smooth text reveal for title - only show if there's actual content
-        const title = annotation.title || '';
+        const title = annotation.title || annotation.object_name || '';
         if (!title && !annotation.description) {
           // No content to show - skip animation
           return;

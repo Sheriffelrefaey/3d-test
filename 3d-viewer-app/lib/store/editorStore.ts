@@ -269,7 +269,11 @@ export const useEditorStore = create<EditorStore>()(
           newHistory.push(currentState);
 
           const newTransforms = new Map(state.transforms);
-          newTransforms.set(objectName, transform);
+          newTransforms.set(objectName, {
+            ...transform,
+            object_name: objectName,
+            model_id: state.modelId || ''
+          });
           return {
             transforms: newTransforms,
             hasUnsavedChanges: true,
@@ -301,7 +305,12 @@ export const useEditorStore = create<EditorStore>()(
             scale: { x: 1, y: 1, z: 1 }
           };
 
-          const newTransform = { ...transform, [property]: value };
+          const newTransform = {
+            ...transform,
+            [property]: value,
+            object_name: objectName,
+            model_id: state.modelId || ''
+          };
           const newTransforms = new Map(state.transforms);
           newTransforms.set(objectName, newTransform);
           return {
@@ -335,7 +344,12 @@ export const useEditorStore = create<EditorStore>()(
             scale: { x: 1, y: 1, z: 1 }
           };
 
-          const newTransform = { ...transform, visible: !transform.visible };
+          const newTransform = {
+            ...transform,
+            visible: !transform.visible,
+            object_name: objectName,
+            model_id: state.modelId || ''
+          };
           const newTransforms = new Map(state.transforms);
           newTransforms.set(objectName, newTransform);
           return {
@@ -369,7 +383,13 @@ export const useEditorStore = create<EditorStore>()(
             scale: { x: 1, y: 1, z: 1 }
           };
 
-          const newTransform = { ...transform, deleted: true, visible: false };
+          const newTransform = {
+            ...transform,
+            deleted: true,
+            visible: false,
+            object_name: objectName,
+            model_id: state.modelId || ''
+          };
           const newTransforms = new Map(state.transforms);
           newTransforms.set(objectName, newTransform);
           return {

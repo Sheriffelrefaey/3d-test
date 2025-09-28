@@ -103,18 +103,34 @@ function ScreenPositionUpdater({ clickPosition, onScreenPositionUpdate }: {
   return null;
 }
 
-// Simple Blue Glow Overlay - 40% blue glowing surface
+// Animated Blue Glow Overlay - Quick flash then fade
 function HUDGlowMaterial({ isSelected }: { isSelected: boolean }) {
   const materialRef = useRef<THREE.MeshStandardMaterial>(null);
-  const timeRef = useRef(0);
+  const startTimeRef = useRef(Date.now());
+  const [opacity, setOpacity] = useState(0.6);
 
-  useFrame((_, delta) => {
+  useEffect(() => {
+    if (isSelected) {
+      // Reset animation when selection changes
+      startTimeRef.current = Date.now();
+      setOpacity(0.6);
+    }
+  }, [isSelected]);
+
+  useFrame(() => {
     if (materialRef.current && isSelected) {
-      timeRef.current += delta;
-      // Stronger pulse between 50% and 70% opacity
-      const pulse = Math.sin(timeRef.current * 2) * 0.1 + 0.6;
-      materialRef.current.opacity = pulse;
-      materialRef.current.emissiveIntensity = pulse * 0.8;
+      const elapsed = (Date.now() - startTimeRef.current) / 1000; // Convert to seconds
+
+      if (elapsed <= 3) {
+        // Slower fade from 0.6 to 0.2 over 3 seconds
+        const newOpacity = 0.6 - (0.4 * (elapsed / 3));
+        materialRef.current.opacity = newOpacity;
+        materialRef.current.emissiveIntensity = newOpacity * 0.8;
+      } else {
+        // After 3 seconds, maintain low opacity
+        materialRef.current.opacity = 0.2;
+        materialRef.current.emissiveIntensity = 0.16;
+      }
     }
   });
 
@@ -362,12 +378,30 @@ function EnhancedScene({
     initialCameraTarget.current = targetPos.clone();
   }, [gltf, camera, onMeshesLoaded]);
 
-  // Apply materials to meshes with texture support
+  // Apply materials to meshes with texture support and handle visibility
   useEffect(() => {
     meshes.forEach(mesh => {
       // Skip the infinite ground plane
       if (mesh.name === 'Plane12847') {
         return;
+      }
+
+      // Handle visibility based on transform state
+      const transform = transforms.get(mesh.name);
+      if (transform) {
+        // Hide mesh if deleted, show if not
+        mesh.visible = !transform.deleted && (transform.visible !== false);
+
+        // Log when objects are restored via undo
+        if (mesh.userData.wasDeleted && !transform.deleted) {
+          console.log(`Object restored via undo: ${mesh.name}`);
+          mesh.userData.wasDeleted = false;
+        } else if (!mesh.userData.wasDeleted && transform.deleted) {
+          mesh.userData.wasDeleted = true;
+        }
+      } else {
+        // Default to visible if no transform exists
+        mesh.visible = true;
       }
 
       const material = materials.get(mesh.name);
@@ -473,10 +507,10 @@ function EnhancedScene({
 
               // Set texture wrap mode
               texture.wrapS = settings.wrapS === 'repeat' ? THREE.RepeatWrapping :
-                            settings.wrapS === 'mirrored' ? THREE.MirroredRepeatWrapping :
+                            settings.wrapS === 'mirror' ? THREE.MirroredRepeatWrapping :
                             THREE.ClampToEdgeWrapping;
               texture.wrapT = settings.wrapT === 'repeat' ? THREE.RepeatWrapping :
-                            settings.wrapT === 'mirrored' ? THREE.MirroredRepeatWrapping :
+                            settings.wrapT === 'mirror' ? THREE.MirroredRepeatWrapping :
                             THREE.ClampToEdgeWrapping;
             }
 
@@ -574,7 +608,7 @@ function EnhancedScene({
         }
       }
     });
-  }, [materials, meshes.length]); // Only re-run when materials change or mesh count changes
+  }, [materials, meshes.length, transforms]); // Re-run when materials, mesh count, or transforms change
 
   // Apply transforms to meshes
   useEffect(() => {
@@ -652,12 +686,6 @@ function EnhancedScene({
   // Handle mesh click with proper closure
   const handleMeshClick = useCallback((event: any, mesh: THREE.Mesh) => {
     console.log('Click detected on mesh:', mesh.name, 'isPlane:', mesh.userData?.isModelPlane);
-
-    // Only prevent selecting the infinite ground plane, not model planes
-    if (mesh.name === 'Plane12847') {
-      console.log('Blocked: infinite ground plane');
-      return;
-    }
 
     // Log plane selection
     if (mesh.userData?.isModelPlane) {
@@ -788,6 +816,25 @@ function EnhancedScene({
         gridColor={`rgb(${environment?.grid.color.r || 100}, ${environment?.grid.color.g || 100}, ${environment?.grid.color.b || 100})`}
         readOnly={readOnly}
         showGrid={environment?.grid.show || false}
+        onSelect={(event, mesh) => {
+          handleMeshClick(event, mesh);
+        }}
+        onContextMenu={(event, mesh) => {
+          if (window.handleMeshRightClick) {
+            window.handleMeshRightClick(event, mesh);
+          }
+        }}
+        onPointerOver={(event, _mesh) => {
+          const evt = event.nativeEvent || event;
+          if (evt.shiftKey || evt.metaKey || evt.ctrlKey) {
+            document.body.style.cursor = 'copy';
+          } else {
+            document.body.style.cursor = 'pointer';
+          }
+        }}
+        onPointerOut={(_event, _mesh) => {
+          document.body.style.cursor = 'default';
+        }}
       />
 
       {/* Removed the invisible plane - no longer needed */}
@@ -977,6 +1024,7 @@ export default function DarkEnhancedModelEditor({
   const [autoRotate, setAutoRotate] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showGroundSettings, setShowGroundSettings] = useState(false);
+  const lastLoadedModelIdRef = useRef<string | null>(null);
 
   // Initialize store
   const {
@@ -1005,17 +1053,23 @@ export default function DarkEnhancedModelEditor({
   // Initialize model in store and load saved state
   useEffect(() => {
     setModelId(modelId);
-    // Load saved state from database
+
+    if (lastLoadedModelIdRef.current === modelId) {
+      return;
+    }
+
+    lastLoadedModelIdRef.current = modelId;
+
     loadState(modelId);
 
-    // Load saved groups
     loadGroups(modelId).then((groups) => {
       setMeshGroups(groups);
       console.log('Loaded groups from database:', groups);
     });
+  }, [modelId, setModelId, loadState]);
 
-    // Reset any model planes that might have been incorrectly marked as deleted
-    setTimeout(() => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
       meshes.forEach(mesh => {
         if (mesh.userData?.isModelPlane && mesh.name !== 'Plane12847') {
           const transform = transforms.get(mesh.name);
@@ -1029,9 +1083,12 @@ export default function DarkEnhancedModelEditor({
           }
         }
       });
-    }, 1000); // Small delay to ensure state is loaded
+    }, 1000);
 
-    // Initialize ground plane material if it doesn't exist
+    return () => clearTimeout(timer);
+  }, [meshes, transforms, setTransform]);
+
+  useEffect(() => {
     if (!materials.has('Plane12847')) {
       setMaterial('Plane12847', {
         model_id: modelId,
@@ -1051,7 +1108,7 @@ export default function DarkEnhancedModelEditor({
         visible: true
       });
     }
-  }, [modelId, setModelId, loadState, materials, setMaterial, setTransform]);
+  }, [materials, modelId, setMaterial, setTransform]);
 
   // Initialize environment separately - only if not set
   useEffect(() => {
@@ -1260,19 +1317,31 @@ export default function DarkEnhancedModelEditor({
     }
 
     if (object && point) {
-      const existingAnnotation = annotations.find(a => a.object_name === object.name);
+      // Check for annotation - first by object name, then by group name
+      const groupName = object.userData?.group;
+      let existingAnnotation = annotations.find(a => a.object_name === object.name);
+
+      // If no annotation found for object, check for group annotation
+      if (!existingAnnotation && groupName) {
+        existingAnnotation = annotations.find(a => a.object_name === groupName);
+      }
 
       if (existingAnnotation) {
         setSelectedAnnotation(existingAnnotation);
+        // Only show HUD if there's actual annotation content (title or description)
+        if (existingAnnotation.title || existingAnnotation.description) {
+          setShowHUD(true);
+        } else {
+          setShowHUD(false);
+        }
       } else {
-        // Support group annotations
-        const groupName = object.userData?.group;
+        // No annotation exists - create placeholder for editing but don't show HUD
         let annotationObjectName = object.name || 'Unnamed Object';
 
         if (groupName) {
           const groupMembers = meshGroups.get(groupName) || [];
           if (groupMembers.length > 0) {
-            annotationObjectName = groupName; // Use group name for annotation
+            annotationObjectName = groupName;
           }
         }
 
@@ -1288,13 +1357,10 @@ export default function DarkEnhancedModelEditor({
           created_at: new Date().toISOString(),
         };
         setSelectedAnnotation(newAnnotation);
+        setShowHUD(false); // Don't show HUD for empty annotations
       }
 
-      // Don't create a default material - preserve the original
-      // The material panel will handle creating materials when user wants to edit
-
       setShowAnnotationPanel(true);
-      setShowHUD(true);
     } else {
       setShowAnnotationPanel(false);
       setSelectedAnnotation(null);
@@ -1528,10 +1594,10 @@ export default function DarkEnhancedModelEditor({
               modelUrl={modelUrl}
               annotations={annotations}
               onObjectSelect={handleObjectSelect} // Allow selection for viewing
-              onMultiSelect={() => {}} // No multi-select in read-only
+              onMultiSelect={updateMultiSelection} // Allow multi-select for group selection
               selectedObject={selectedObject}
-              selectedObjects={[]}
-              selectedMeshNames={[]}
+              selectedObjects={selectedObjects} // Pass actual selected objects for groups
+              selectedMeshNames={selectedMeshNames} // Pass actual selected names for groups
               onSceneClick={handleSceneClick}
               resetViewRef={resetViewRef}
               onMeshesLoaded={handleMeshesLoaded}
